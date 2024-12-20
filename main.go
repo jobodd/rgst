@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -20,7 +21,9 @@ const (
 
 func main() {
 	var shouldFetch bool
-	var recurseDepth uint = 0
+	var recurseDepth uint
+	var path string
+	var command string
 
 	app := &cli.App{
 		Name:  "Recursive git status",
@@ -36,12 +39,32 @@ func main() {
 				Name:        "depth",
 				Aliases:     []string{"d"},
 				Usage:       "Set the recursion depth to check for git repos",
+				Value: 0,
 				Destination: &recurseDepth,
+			},
+			&cli.StringFlag{
+				Name:        "command",
+				Aliases:     []string{"c", "cmd"},
+				Usage:       "Command to run in each directory",
+				Value: "git status",
+				Destination: &command,
+			},
+			&cli.StringFlag{
+				Name:        "path",
+				Aliases:     []string{"p"},
+				Usage:       "Directory to process; defaults to pwd",
+				Value: ".",
+				Destination: &path,
 			},
 		},
 		Action: func(c *cli.Context) error {
+			if c.Args().Len() > 1 {
+				return errors.New("Too many arguments")
+			}
+
+			// TODO: warn user max depth exceeeded
 			recurseDepth = min(5, recurseDepth)
-			return iterateDirectories(recurseDepth, shouldFetch)
+			return mainProcess(path, command, recurseDepth, shouldFetch)
 		},
 	}
 
@@ -51,50 +74,64 @@ func main() {
 	}
 }
 
-func iterateDirectories(recurseDepth uint, shouldFetch bool) error {
-	fmt.Printf("Will recurse to a depth of: %d\n\n", recurseDepth)
 
-	entries, err := os.ReadDir("./")
-	if err != nil {
-		log.Fatal(err)
+type pathTo struct {
+	base string
+	name string
+}
+
+func mainProcess(path string, command string, recurseDepth uint, shouldFetch bool) error {
+	// fmt.Printf("Will recurse to a depth of: %d\n\n", recurseDepth)
+	// fmt.Printf("Will process from base path: %s\n", path)
+	// fmt.Printf("Will run command: %s\n", command)
+
+	maxDirLength := 0
+	gitDirs := getGitDirectories(path, 0, recurseDepth, &maxDirLength)
+	fmt.Println(strings.Repeat("=", maxDirLength))
+	fmt.Println(path)
+	fmt.Println(strings.Repeat("=", maxDirLength))
+	for _, gitDir := range gitDirs {
+		requiredPadding := maxDirLength-len(gitDir.name)
+		pad := strings.Repeat(" ", requiredPadding)
+		fmt.Printf("%s%s%s:\n", gitDir.base, gitDir.name, pad)
 	}
 
-	gitDirectories, maxDirLength, maxBranchLength := getGitDirectories(entries)
-
-	for _, dir := range gitDirectories {
-		err := checkGitStatus(dir, shouldFetch, maxDirLength, maxBranchLength)
-		if err != nil {
-			return err
-		}
-	}
 
 	return nil
 }
 
-func getGitDirectories(entries []fs.DirEntry) ([]fs.DirEntry, int, int) {
-	maxDirLength := 0
-	maxBranchLength := 0
-	var gitDirectories []fs.DirEntry
-	for _, dir := range entries {
-		if !dir.IsDir() {
-			continue
-		}
-		if isGitDirectory(dir) {
-			gitDirectories = append(gitDirectories, dir)
-			if len(dir.Name()) > maxDirLength {
-				maxDirLength = len(dir.Name())
+func getGitDirectories(basePath string, depth uint, recurseDepth uint, maxDirLength *int) ([]pathTo) {
+	if depth > recurseDepth {
+		return []pathTo{}
+	}
+
+	var gitDirectories []pathTo
+	entries, err := os.ReadDir(basePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			dirPath := filepath.Join(basePath, entry.Name())
+			gitPath := filepath.Join(dirPath, ".git")
+
+			if _, err := os.Stat(gitPath); err == nil {
+				gitDirectories = append(gitDirectories, pathTo{dirPath, entry.Name()})
+				dirNameLength := len(entry.Name())
+				if dirNameLength > *maxDirLength {
+					*maxDirLength = dirNameLength
+				}
 			}
 
-			branchName, err := getGitBranch(dir)
-			if err != nil {
-				log.Fatal(err)
-			}
-			if len(branchName) > maxBranchLength {
-				maxBranchLength = len(branchName)
+			gitSubDirectories := getGitDirectories(dirPath, depth+1, recurseDepth, maxDirLength)
+			if len(gitDirectories) > 0 {
+				gitDirectories = append(gitDirectories, gitSubDirectories...)
 			}
 		}
 	}
-	return gitDirectories, maxDirLength, maxBranchLength
+
+	return gitDirectories
 }
 
 func getGitBranch(gitDirectory fs.DirEntry) (string, error) {
@@ -157,10 +194,13 @@ func padText(s string, maxDirLength int) string {
 	}
 }
 
-func isGitDirectory(directory fs.DirEntry) bool {
-	fp := filepath.Join(directory.Name(), ".git")
-	_, err := os.Stat(fp)
-	return err == nil
+func isGitDirectory(basePath string, directory fs.DirEntry) ( bool, error  ){
+	fp := filepath.Join(basePath, directory.Name(), ".git")
+	info, err := os.Stat(fp)
+	if err != nil {
+		return false, err
+	}
+	return info.IsDir(), nil
 }
 
 const MAX_STATUS_LENGTH = 14
