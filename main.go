@@ -20,6 +20,7 @@ const (
 
 func main() {
 	var shouldFetch bool
+	var recurseDepth uint = 0
 
 	app := &cli.App{
 		Name:  "Recursive git status",
@@ -31,9 +32,16 @@ func main() {
 				Usage:       "Fetch the latest changes from origin",
 				Destination: &shouldFetch,
 			},
+			&cli.UintFlag{
+				Name:        "depth",
+				Aliases:     []string{"d"},
+				Usage:       "Set the recursion depth to check for git repos",
+				Destination: &recurseDepth,
+			},
 		},
 		Action: func(c *cli.Context) error {
-			return iterateDirectories(shouldFetch)
+			recurseDepth = min(5, recurseDepth)
+			return iterateDirectories(recurseDepth, shouldFetch)
 		},
 	}
 
@@ -43,7 +51,8 @@ func main() {
 	}
 }
 
-func iterateDirectories(shouldFetch bool) error {
+func iterateDirectories(recurseDepth uint, shouldFetch bool) error {
+	fmt.Printf("Will recurse to a depth of: %d\n\n", recurseDepth)
 
 	entries, err := os.ReadDir("./")
 	if err != nil {
