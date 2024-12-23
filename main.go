@@ -155,7 +155,16 @@ func FilterNodes(node *Node) *Node {
 }
 
 func GetTreePadding(node *Node) int {
-	return 0
+	if node == nil {
+		return 0
+	}
+
+	padding := len(node.folderName) + 4 + (node.GetDepth() * 2)
+	for _, child := range node.children {
+		childPadding := GetTreePadding(child)
+		padding = max(padding, childPadding)
+	}
+	return padding
 }
 
 func mainProcess(path string, command string, recurseDepth uint, shouldFetch bool) error {
@@ -170,15 +179,19 @@ func mainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 	node := NewNode(targetDir, absolutePath, nil)
 	getGitDirectories(node, 0, recurseDepth, &maxDirLength)
 	FilterNodes(node)
-	treePadding := GetTreePadding(node)
 
+	maxTreeWidth := GetTreePadding(node)
 	Walk(node, func(n *Node) {
-		pad := strings.Repeat("  ", n.GetDepth())
-		fmt.Printf("%s|-- %s\n", pad, n.folderName)
+		leftPad := strings.Repeat("  ", n.GetDepth())
+		text := fmt.Sprintf("%s|-- %s", leftPad, n.folderName)
 		if n.isGitRepo {
-			// fmt.Printf("Depth: %d", n.GetDepth())
-			// fmt.Printf("%s has %d children\n", n.folderName, len( n.children  ))
+			branch := getGitBranch(n.absPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			text = text + strings.Repeat(" ", maxTreeWidth-len(text)) + " git! "+ strings.ReplaceAll(branch, "\n", "")
 		}
+		fmt.Printf("%s\n", text)
 	})
 
 	return nil
@@ -218,25 +231,26 @@ func getGitDirectories(node *Node, depth uint, recurseDepth uint, maxDirLength *
 
 }
 
-func getGitBranch(gitDirectory fs.DirEntry) (string, error) {
-	err := os.Chdir(gitDirectory.Name())
+func getGitBranch(gitDirectory string) string {
+
+	err := os.Chdir(gitDirectory)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	branch, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").Output()
-
-	err = os.Chdir("..")
-	return string(branch), err
-}
-
-func checkGitStatus(gitDirectory fs.DirEntry, shouldFetch bool, maxDirLength int, maxBranchLength int) error {
-	branch, err := getGitBranch(gitDirectory)
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
 
-	err = os.Chdir(gitDirectory.Name())
+	// err = os.Chdir("..")
+	return string(branch)
+}
+
+func checkGitStatus(gitDirectory string, shouldFetch bool, maxDirLength int, maxBranchLength int) error {
+	branch := getGitBranch(gitDirectory)
+
+	err := os.Chdir(gitDirectory)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -253,7 +267,7 @@ func checkGitStatus(gitDirectory fs.DirEntry, shouldFetch bool, maxDirLength int
 	err = os.Chdir("..")
 
 	// print outputs
-	paddedDir := padText(gitDirectory.Name(), maxDirLength)
+	paddedDir := padText(gitDirectory, maxDirLength)
 	paddedBranch := padText(branch, maxBranchLength)
 	fmt.Printf("├──  %s %s %s %s\n", paddedDir, paddedBranch, status, changes)
 
