@@ -39,21 +39,21 @@ func main() {
 				Name:        "depth",
 				Aliases:     []string{"d"},
 				Usage:       "Set the recursion depth to check for git repos",
-				Value: 0,
+				Value:       0,
 				Destination: &recurseDepth,
 			},
 			&cli.StringFlag{
 				Name:        "command",
 				Aliases:     []string{"c", "cmd"},
 				Usage:       "Command to run in each directory",
-				Value: "git status",
+				Value:       "git status",
 				Destination: &command,
 			},
 			&cli.StringFlag{
 				Name:        "path",
 				Aliases:     []string{"p"},
 				Usage:       "Directory to process; defaults to pwd",
-				Value: ".",
+				Value:       ".",
 				Destination: &path,
 			},
 		},
@@ -74,10 +74,32 @@ func main() {
 	}
 }
 
+type Node struct {
+	folderName string
+	absPath    string
+	isGitRepo  bool
+	parent     *Node
+	children   []*Node
+}
 
-type pathTo struct {
-	base string
-	name string
+// func (n Node) GetParentPath() string {
+// 	if n.parent == nil {
+// 		return n.folderName
+// 	} else {
+// 		return n.parent.GetFullPath() + "/"
+// 	}
+// }
+// func (n Node) GetFullPath() string {
+// 	return n.GetParentPath() + n.folderName
+// }
+func NewNode(folderName, absPath string, parent *Node) *Node {
+	return &Node{
+		folderName: folderName,
+		absPath: absPath,
+		isGitRepo: false,
+		parent: parent,
+		children: []*Node{},
+	}
 }
 
 func mainProcess(path string, command string, recurseDepth uint, shouldFetch bool) error {
@@ -86,52 +108,62 @@ func mainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 	// fmt.Printf("Will run command: %s\n", command)
 
 	maxDirLength := 0
-	gitDirs := getGitDirectories(path, 0, recurseDepth, &maxDirLength)
-	fmt.Println(strings.Repeat("=", maxDirLength))
-	fmt.Println(path)
-	fmt.Println(strings.Repeat("=", maxDirLength))
-	for _, gitDir := range gitDirs {
-		requiredPadding := maxDirLength-len(gitDir.name)
-		pad := strings.Repeat(" ", requiredPadding)
-		fmt.Printf("%s%s%s:\n", gitDir.base, gitDir.name, pad)
-	}
 
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	targetDir := filepath.Base(absolutePath)
+
+	nodePtr := NewNode(targetDir, absolutePath, nil)
+	getGitDirectories(nodePtr, 0, recurseDepth, &maxDirLength)
+
+	//TODO: walk nodes and print tree
+
+	// for _, gitDir := range gitDirs {
+	// 	requiredPadding := maxDirLength - len(gitDir.name)
+	// 	pad := strings.Repeat(" ", requiredPadding)
+	// 	fmt.Printf("%s%s%s:\n", gitDir.base, gitDir.name, pad)
+	// }
 
 	return nil
 }
 
-func getGitDirectories(basePath string, depth uint, recurseDepth uint, maxDirLength *int) ([]pathTo) {
+func getGitDirectories(node *Node, depth uint, recurseDepth uint, maxDirLength *int) {
 	if depth > recurseDepth {
-		return []pathTo{}
+		return
 	}
-
-	var gitDirectories []pathTo
-	entries, err := os.ReadDir(basePath)
+	fmt.Printf("Will read path: %s\n", node.absPath)
+	entries, err := os.ReadDir(node.absPath)
+	// entries, err := os.ReadDir(node.folderName)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	for _, entry := range entries {
 		if entry.IsDir() {
-			dirPath := filepath.Join(basePath, entry.Name())
+			// fmt.Printf("%s", entry.Name())
+			dirPath := filepath.Join(node.absPath, entry.Name())
 			gitPath := filepath.Join(dirPath, ".git")
 
 			if _, err := os.Stat(gitPath); err == nil {
-				gitDirectories = append(gitDirectories, pathTo{dirPath, entry.Name()})
+				// fmt.Printf("%s is a dir.\n", gitPath)
+				// gitDirectories = append(gitDirectories, pathTo{dirPath, entry.Name()})
+				childNodePtr := NewNode(entry.Name(), dirPath, node)
+				node.children = append(node.children, childNodePtr)
 				dirNameLength := len(entry.Name())
 				if dirNameLength > *maxDirLength {
 					*maxDirLength = dirNameLength
 				}
 			}
 
-			gitSubDirectories := getGitDirectories(dirPath, depth+1, recurseDepth, maxDirLength)
-			if len(gitDirectories) > 0 {
-				gitDirectories = append(gitDirectories, gitSubDirectories...)
-			}
+			// gitSubDirectories := getGitDirectories(dirPath, depth+1, recurseDepth, maxDirLength)
+			// if len(gitDirectories) > 0 {
+			// 	gitDirectories = append(gitDirectories, gitSubDirectories...)
+			// }
 		}
 	}
 
-	return gitDirectories
 }
 
 func getGitBranch(gitDirectory fs.DirEntry) (string, error) {
@@ -194,7 +226,7 @@ func padText(s string, maxDirLength int) string {
 	}
 }
 
-func isGitDirectory(basePath string, directory fs.DirEntry) ( bool, error  ){
+func isGitDirectory(basePath string, directory fs.DirEntry) (bool, error) {
 	fp := filepath.Join(basePath, directory.Name(), ".git")
 	info, err := os.Stat(fp)
 	if err != nil {
