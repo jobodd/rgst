@@ -82,31 +82,83 @@ type Node struct {
 	children   []*Node
 }
 
-// func (n Node) GetParentPath() string {
-// 	if n.parent == nil {
-// 		return n.folderName
-// 	} else {
-// 		return n.parent.GetFullPath() + "/"
-// 	}
-// }
-// func (n Node) GetFullPath() string {
-// 	return n.GetParentPath() + n.folderName
-// }
+//	func (n Node) GetParentPath() string {
+//		if n.parent == nil {
+//			return n.folderName
+//		} else {
+//			return n.parent.GetFullPath() + "/"
+//		}
+//	}
+//
+//	func (n Node) GetFullPath() string {
+//		return n.GetParentPath() + n.folderName
+//	}
 func NewNode(folderName, absPath string, parent *Node) *Node {
 	return &Node{
 		folderName: folderName,
-		absPath: absPath,
-		isGitRepo: false,
-		parent: parent,
-		children: []*Node{},
+		absPath:    absPath,
+		isGitRepo:  false,
+		parent:     parent,
+		children:   []*Node{},
+	}
+}
+func (n *Node) GetDepth() int {
+	var depth int
+	GetDepth(n, &depth)
+	return depth
+}
+
+func GetDepth(n *Node, depthPtr *int) {
+	if n.parent == nil {
+		return
+	}
+	(*depthPtr)++
+	GetDepth(n.parent, depthPtr)
+}
+
+func Walk(node *Node, visit func(*Node)) {
+	if node == nil {
+		return
+	}
+
+	visit(node)
+
+	for _, child := range node.children {
+		Walk(child, visit)
 	}
 }
 
-func mainProcess(path string, command string, recurseDepth uint, shouldFetch bool) error {
-	// fmt.Printf("Will recurse to a depth of: %d\n\n", recurseDepth)
-	// fmt.Printf("Will process from base path: %s\n", path)
-	// fmt.Printf("Will run command: %s\n", command)
+func FilterNodes(node *Node) *Node {
+	if node == nil {
+		return nil
+	}
 
+	// Filter children recursively.
+	var filteredChildren []*Node
+	for _, child := range node.children {
+		filteredChild := FilterNodes(child)
+		if filteredChild != nil {
+			filteredChildren = append(filteredChildren, filteredChild)
+		}
+	}
+
+	// Update the node's children to the filtered list.
+	node.children = filteredChildren
+
+	// Check if this node or any of its children have Foo set to true.
+	if node.isGitRepo || len(filteredChildren) > 0 {
+		return node
+	}
+
+	// If neither this node nor its children have Foo set to true, remove it.
+	return nil
+}
+
+func GetTreePadding(node *Node) int {
+	return 0
+}
+
+func mainProcess(path string, command string, recurseDepth uint, shouldFetch bool) error {
 	maxDirLength := 0
 
 	absolutePath, err := filepath.Abs(path)
@@ -115,25 +167,29 @@ func mainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 	}
 	targetDir := filepath.Base(absolutePath)
 
-	nodePtr := NewNode(targetDir, absolutePath, nil)
-	getGitDirectories(nodePtr, 0, recurseDepth, &maxDirLength)
+	node := NewNode(targetDir, absolutePath, nil)
+	getGitDirectories(node, 0, recurseDepth, &maxDirLength)
+	FilterNodes(node)
+	treePadding := GetTreePadding(node)
 
-	//TODO: walk nodes and print tree
-
-	// for _, gitDir := range gitDirs {
-	// 	requiredPadding := maxDirLength - len(gitDir.name)
-	// 	pad := strings.Repeat(" ", requiredPadding)
-	// 	fmt.Printf("%s%s%s:\n", gitDir.base, gitDir.name, pad)
-	// }
+	Walk(node, func(n *Node) {
+		pad := strings.Repeat("  ", n.GetDepth())
+		fmt.Printf("%s|-- %s\n", pad, n.folderName)
+		if n.isGitRepo {
+			// fmt.Printf("Depth: %d", n.GetDepth())
+			// fmt.Printf("%s has %d children\n", n.folderName, len( n.children  ))
+		}
+	})
 
 	return nil
 }
 
 func getGitDirectories(node *Node, depth uint, recurseDepth uint, maxDirLength *int) {
 	if depth > recurseDepth {
+		// fmt.Println("Returning")
 		return
 	}
-	fmt.Printf("Will read path: %s\n", node.absPath)
+	// fmt.Printf("Will read path: %s\n", node.absPath)
 	entries, err := os.ReadDir(node.absPath)
 	// entries, err := os.ReadDir(node.folderName)
 	if err != nil {
@@ -145,22 +201,18 @@ func getGitDirectories(node *Node, depth uint, recurseDepth uint, maxDirLength *
 			// fmt.Printf("%s", entry.Name())
 			dirPath := filepath.Join(node.absPath, entry.Name())
 			gitPath := filepath.Join(dirPath, ".git")
+			// fmt.Printf("Trying: %s\n", gitPath)
 
+			// fmt.Printf("New Child: %s\n", entry.Name())
+			childNodePtr := NewNode(entry.Name(), dirPath, node)
+			node.children = append(node.children, childNodePtr)
 			if _, err := os.Stat(gitPath); err == nil {
-				// fmt.Printf("%s is a dir.\n", gitPath)
-				// gitDirectories = append(gitDirectories, pathTo{dirPath, entry.Name()})
-				childNodePtr := NewNode(entry.Name(), dirPath, node)
-				node.children = append(node.children, childNodePtr)
-				dirNameLength := len(entry.Name())
-				if dirNameLength > *maxDirLength {
-					*maxDirLength = dirNameLength
-				}
+				childNodePtr.isGitRepo = true
 			}
 
-			// gitSubDirectories := getGitDirectories(dirPath, depth+1, recurseDepth, maxDirLength)
-			// if len(gitDirectories) > 0 {
-			// 	gitDirectories = append(gitDirectories, gitSubDirectories...)
-			// }
+			// fmt.Println("recursing")
+			// recurse
+			getGitDirectories(childNodePtr, depth+1, recurseDepth, maxDirLength)
 		}
 	}
 
