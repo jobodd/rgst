@@ -14,10 +14,19 @@ import (
 )
 
 const (
-	green = "\033[0;32m"
-	red   = "\033[0;31m"
-	reset = "\033[0m"
+	Red    = "\033[31m"
+	Green  = "\033[32m"
+	Yellow = "\033[33m"
+	Blue   = "\033[34m"
+	Reset  = "\033[0m"
 )
+
+func colouredInt(i int, colour string) string {
+	return colouredString(strconv.Itoa(i), colour)
+}
+func colouredString(s string, colour string) string {
+	return colour + s + Reset
+}
 
 func main() {
 	var shouldFetch bool
@@ -75,17 +84,46 @@ func main() {
 }
 
 type Node struct {
-	folderName string
-	absPath    string
-	parent     *Node
-	children   []*Node
-	isGitRepo  bool
-	branch     string
-	ahead      int
-	behind     int
-	added      int
-	deleted    int
-	modified   int
+	folderName      string
+	absPath         string
+	parent          *Node
+	children        []*Node
+	isGitRepo       bool
+	branch          string
+	ahead           int
+	behind          int
+	added           int
+	deleted         int
+	modified        int
+	folderTreeWidth int
+	branchNameWidth int
+	gitStatsWidth   int
+}
+
+type FormatStats struct {
+	maxFolderTreeWidth int
+	maxBranchWidth     int
+	maxGitStatsWidth   int
+}
+
+type GitStats struct {
+	currentBranch  string
+	hasRemote      bool
+	nCommitsAhead  int
+	nCommitsBehind int
+	nFilesAdded    int
+	nFilesRemoved  int
+	nFilesModified int
+	nFilesUnstaged int
+}
+
+func (g *GitStats) StatsLen() int {
+	return len(string(g.nCommitsAhead)) +
+		len(string(g.nCommitsBehind)) +
+		len(string(g.nFilesAdded)) +
+		len(string(g.nFilesRemoved)) +
+		len(string(g.nFilesModified)) +
+		len(string(g.nFilesUnstaged))
 }
 
 func NewNode(folderName, absPath string, parent *Node) *Node {
@@ -149,18 +187,19 @@ func FilterNodes(node *Node) *Node {
 	return nil
 }
 
-func GetTreePadding(node *Node) int {
-	if node == nil {
-		return 0
-	}
-
-	padding := len(node.folderName) + 4 + (node.GetDepth() * 2)
-	for _, child := range node.children {
-		childPadding := GetTreePadding(child)
-		padding = max(padding, childPadding)
-	}
-	return padding
-}
+//
+// func GetTreePadding(node *Node) int {
+// 	if node == nil {
+// 		return 0
+// 	}
+//
+// 	padding := len(node.folderName) + 4 + (node.GetDepth() * 2)
+// 	for _, child := range node.children {
+// 		childPadding := GetTreePadding(child)
+// 		padding = max(padding, childPadding)
+// 	}
+// 	return padding
+// }
 
 func mainProcess(path string, command string, recurseDepth uint, shouldFetch bool) error {
 	maxDirLength := 0
@@ -175,37 +214,60 @@ func mainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 	getGitDirectories(node, 0, recurseDepth, &maxDirLength)
 	FilterNodes(node)
 
-	maxTreeWidth := GetTreePadding(node)
-	// print headers
-	headers := "Dir"
-	headers = headers + strings.Repeat(" ", maxTreeWidth-len(headers)) + " " + "Branch"
-	fmt.Println(headers)
+	// maxTreeWidth := GetTreePadding(node)
+	// // print headers
+	// headers := "Dir"
+	// headers = headers + strings.Repeat(" ", maxTreeWidth-len(headers)) + " " + "Branch"
+	// fmt.Println(headers)
 
-	// print tree
-	Walk(node, func(n *Node) {
-		leftPad := strings.Repeat("  ", n.GetDepth())
-		text := fmt.Sprintf("%s|-- %s", leftPad, n.folderName)
-		if n.isGitRepo {
-			if hasSingleRemote, err := gitDirHasSingleRemote(n.absPath); err != nil {
-				fmt.Printf("panic checking: %s", n.absPath)
-				panic(err)
-			} else if hasSingleRemote {
-				branch := getGitBranch(n.absPath)
-				text = text + strings.Repeat(" ", maxTreeWidth-len(text)) + " " + strings.ReplaceAll(branch, "\n", "")
+	formatStats := collectStats(node)
+	fmt.Println(formatStats)
 
-				ahead, behind, added, deleted, modified, err := getGitStats(n.absPath)
-				if err != nil {
-					fmt.Println("Fatal getting git stats")
-					panic(err)
-				}
-				text = text + fmt.Sprintf(" \u2191%d \u2193%d +%d -%d ~%d", ahead, behind, added, deleted, modified)
-			}
-
-		}
-		fmt.Printf("%s\n", text)
-	})
-
+	// leftPad := strings.Repeat("  ", n.GetDepth())
+	//  := fmt.Sprintf("%s|-- %s", leftPad, n.folderName)
+	// branch := getGitBranch(n.absPath)
+	// text = text + strings.Repeat(" ", maxTreeWidth-len(text)) + " " + strings.ReplaceAll(branch, "\n", "")
+	//
+	// ahead, behind, added, deleted, modified, unstaged, err := getGitStats(n.absPath)
+	// if err != nil {
+	// 	fmt.Println("Fatal getting git stats")
+	// 	panic(err)
+	// }
+	// text = text + fmt.Sprintf(" \u2191%s \u2193%s +%s -%s ~%s u%s",
+	// 	colouredInt(ahead, Green),
+	// 	colouredInt(behind, Red),
+	// 	colouredInt(added, Green),
+	// 	colouredInt(deleted, Red),
+	// 	colouredInt(modified, Yellow),
+	// 	colouredInt(unstaged, Red),
+	// )
 	return nil
+}
+
+func collectStats(node *Node) FormatStats {
+	var formatStats FormatStats
+	Walk(node, func(n *Node) {
+		n.folderTreeWidth = len(node.folderName) + 4 + (node.GetDepth() * 2)
+		if n.folderTreeWidth > formatStats.maxFolderTreeWidth {
+			formatStats.maxFolderTreeWidth = n.folderTreeWidth
+		}
+
+		if n.isGitRepo {
+			gitStats, err := getGitStats(n.absPath)
+			if err != nil {
+				panic(err)
+			}
+			branchNameLen := len(gitStats.currentBranch)
+			if branchNameLen > formatStats.maxBranchWidth {
+				formatStats.maxBranchWidth = branchNameLen
+			}
+			statsWidth := gitStats.StatsLen()
+			if statsWidth > formatStats.maxBranchWidth {
+				formatStats.maxBranchWidth = statsWidth
+			}
+		}
+	})
+	return formatStats
 }
 
 func getGitDirectories(node *Node, depth uint, recurseDepth uint, maxDirLength *int) {
@@ -296,8 +358,7 @@ func isGitDirectory(basePath string, directory fs.DirEntry) (bool, error) {
 	return info.IsDir(), nil
 }
 
-
-func gitDirHasSingleRemote(absDir string) ( bool, error  ){
+func gitDirHasSingleRemote(absDir string) (bool, error) {
 	cmd := exec.Command("git", "remote", "-v")
 	cmd.Dir = absDir
 	remoteOutput, err := cmd.Output()
@@ -309,40 +370,46 @@ func gitDirHasSingleRemote(absDir string) ( bool, error  ){
 	return wc == 3, nil
 }
 
-func getGitStats(absDir string) (ahead int, behind int, added int, deleted int, modified int, err error) {
-	if hasSingle, err := gitDirHasSingleRemote(absDir); err != nil { 
-		//TODO:
-		return -99, -99, -99, -99, -99, nil
-	} else if !hasSingle {
-		return -99, -99, -99, -99, -99, nil
+func getGitStats(absDir string) (GitStats, error) {
+	var gitStats GitStats
+
+	if hasSingle, err := gitDirHasSingleRemote(absDir); err != nil {
+		return gitStats, err
+	} else {
+		//TODO: handle multiple remotes
+		gitStats.hasRemote = hasSingle
 	}
-	
 
 	// Get the current branch
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
 	cmd.Dir = absDir
 	branchOutput, err := cmd.Output()
 	if err != nil {
-		return 0, 0, 0, 0, 0, fmt.Errorf("failed to get current branch: %w", err)
+		return gitStats, fmt.Errorf("failed to get current branch: %w", err)
 	}
-	currentBranch := strings.TrimSpace(string(branchOutput))
-	// fmt.Printf("Current branch: %s", currentBranch)
+	gitStats.currentBranch = strings.TrimSpace(string(branchOutput))
 
 	// Get ahead/behind count
-	cmd = exec.Command("git", "rev-list", "--count", "--left-right", fmt.Sprintf("origin/%s...%s", currentBranch, currentBranch))
+	cmd = exec.Command("git",
+		"rev-list",
+		"--count",
+		"--left-right",
+		fmt.Sprintf("origin/%s...%s",
+			gitStats.currentBranch,
+			gitStats.currentBranch))
 	cmd.Dir = absDir
 
 	aheadBehindOutput, err := cmd.CombinedOutput()
 	if err != nil {
-		if strings.Contains(string(aheadBehindOutput), "unknown revision or path not in the working tree"){
-			return 0, 0, -99, -99, -99, nil
+		if strings.Contains(string(aheadBehindOutput), "unknown revision or path not in the working tree") {
+			return gitStats, nil
 		}
-		return 0, 0, 0, 0, 0, fmt.Errorf("failed to get ahead/behind count.\nBranch was: %s\nError was: %w", currentBranch, err)
+		return gitStats, fmt.Errorf("failed to get ahead/behind count.\nBranch was: %s\nError was: %w", gitStats.currentBranch, err)
 	}
 	parts := strings.Fields(string(aheadBehindOutput))
 	if len(parts) == 2 {
-		behind, _ = strconv.Atoi(parts[0])
-		ahead, _ = strconv.Atoi(parts[1])
+		gitStats.nCommitsBehind, _ = strconv.Atoi(parts[0])
+		gitStats.nCommitsAhead, _ = strconv.Atoi(parts[1])
 	}
 
 	// Get lines added, deleted, and modified
@@ -350,7 +417,7 @@ func getGitStats(absDir string) (ahead int, behind int, added int, deleted int, 
 	cmd.Dir = absDir
 	diffOutput, err := cmd.Output()
 	if err != nil {
-		return 0, 0, 0, 0, 0, fmt.Errorf("failed to get diff stats: %w", err)
+		return gitStats, fmt.Errorf("failed to get diff stats: %w", err)
 	}
 	diffLines := strings.Split(string(diffOutput), "\n")
 	if len(diffLines) > 1 {
@@ -359,15 +426,15 @@ func getGitStats(absDir string) (ahead int, behind int, added int, deleted int, 
 			words := strings.Fields(lastLine)
 			for i, word := range words {
 				if strings.HasSuffix(word, "insertion(+),") || strings.HasSuffix(word, "insertion(+)") {
-					added, _ = strconv.Atoi(words[i-1])
+					gitStats.nFilesAdded, _ = strconv.Atoi(words[i-1])
 				} else if strings.HasSuffix(word, "deletion(-),") || strings.HasSuffix(word, "deletion(-)") {
-					deleted, _ = strconv.Atoi(words[i-1])
+					gitStats.nFilesRemoved, _ = strconv.Atoi(words[i-1])
 				} else if strings.HasPrefix(word, "modified,") {
-					modified, _ = strconv.Atoi(words[i-1])
+					gitStats.nFilesModified, _ = strconv.Atoi(words[i-1])
 				}
 			}
 		}
 	}
 
-	return ahead, behind, added, deleted, modified, nil
+	return gitStats, nil
 }
