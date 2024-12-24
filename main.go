@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -81,6 +80,12 @@ type Node struct {
 	parent     *Node
 	children   []*Node
 	isGitRepo  bool
+	branch     string
+	ahead      int
+	behind     int
+	added      int
+	deleted    int
+	modified   int
 }
 
 func NewNode(folderName, absPath string, parent *Node) *Node {
@@ -162,7 +167,7 @@ func mainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 
 	absolutePath, err := filepath.Abs(path)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	targetDir := filepath.Base(absolutePath)
 
@@ -189,18 +194,24 @@ func mainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 		leftPad := strings.Repeat("  ", n.GetDepth())
 		text := fmt.Sprintf("%s|-- %s", leftPad, n.folderName)
 		if n.isGitRepo {
-			branch := getGitBranch(n.absPath)
-			if err != nil {
-				log.Fatal(err)
+			if hasSingleRemote, err := gitDirHasSingleRemote(n.absPath); err != nil {
+				panic(err)
+			} else if hasSingleRemote {
+				branch := getGitBranch(n.absPath)
+				if err != nil {
+					panic(err)
+				}
+
+				text = text + strings.Repeat(" ", maxTreeWidth-len(text)) + " " + strings.ReplaceAll(branch, "\n", "")
+
+				ahead, behind, added, deleted, modified, err := getGitStats(n.absPath)
+				if err != nil {
+					fmt.Println("Fatal getting git stats")
+					panic(err)
+				}
+				text = text + fmt.Sprintf(" A%d B%d +%d -%d ~%d", ahead, behind, added, deleted, modified)
 			}
 
-			text = text + strings.Repeat(" ", maxTreeWidth-len(text)) + " " + strings.ReplaceAll(branch, "\n", "")
-
-			ahead, behind, added, deleted, modified, err := getGitStats(n.absPath)
-			if err != nil {
-				log.Fatal(err)
-			}
-			text = text + fmt.Sprintf(" A%d B%d +%d -%d ~%d", ahead, behind, added, deleted, modified)
 		}
 		fmt.Printf("%s\n", text)
 	})
@@ -217,7 +228,7 @@ func getGitDirectories(node *Node, depth uint, recurseDepth uint, maxDirLength *
 	entries, err := os.ReadDir(node.absPath)
 	// entries, err := os.ReadDir(node.folderName)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	for _, entry := range entries {
@@ -246,7 +257,7 @@ func getGitBranch(gitDirectory string) string {
 
 	err := os.Chdir(gitDirectory)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
@@ -254,7 +265,8 @@ func getGitBranch(gitDirectory string) string {
 
 	branchOutput, err := cmd.Output()
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(string(branchOutput))
+		panic(err)
 	}
 
 	// err = os.Chdir("..")
@@ -274,8 +286,7 @@ func padText(s string, maxDirLength int) string {
 		return s
 	default:
 		fmt.Printf("Failed to pad: %s", s)
-		log.Fatal("Attempting to pad a string longer than the pad length")
-		return s
+		panic("Attempting to pad a string longer than the pad length")
 	}
 }
 
@@ -287,22 +298,31 @@ func isGitDirectory(basePath string, directory fs.DirEntry) (bool, error) {
 	}
 	return info.IsDir(), nil
 }
-func getGitStats(absDir string) (ahead int, behind int, added int, deleted int, modified int, err error) {
+
+
+func gitDirHasSingleRemote(absDir string) ( bool, error  ){
 	cmd := exec.Command("git", "remote", "-v")
 	cmd.Dir = absDir
 	remoteOutput, err := cmd.Output()
 	if err != nil {
-		return 0, 0, 0, 0, 0, fmt.Errorf("failed to get current branch: %w", err)
+		return false, fmt.Errorf("failed to get current branch: %w", err)
 	}
 	wc := len(strings.Split(string(remoteOutput), "\n"))
-	if wc != 3 { // two lines ending \n gives a count of three
+
+	return wc == 3, nil
+}
+
+func getGitStats(absDir string) (ahead int, behind int, added int, deleted int, modified int, err error) {
+	if hasSingle, err := gitDirHasSingleRemote(absDir); err != nil { 
 		//TODO:
-		fmt.Printf("Remote count was: %d", wc)
+		return -99, -99, -99, -99, -99, nil
+	} else if !hasSingle {
 		return -99, -99, -99, -99, -99, nil
 	}
+	
 
 	// Get the current branch
-	cmd = exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
 	cmd.Dir = absDir
 	branchOutput, err := cmd.Output()
 	if err != nil {
