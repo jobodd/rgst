@@ -58,17 +58,21 @@ func main() {
 				Value:       "git status",
 				Destination: &command,
 			},
-			&cli.StringFlag{
-				Name:        "path",
-				Aliases:     []string{"p"},
-				Usage:       "Directory to process; defaults to pwd",
-				Value:       ".",
-				Destination: &path,
-			},
+			// &cli.StringFlag{
+			// 	Name:        "path",
+			// 	Aliases:     []string{"p"},
+			// 	Usage:       "Directory to process; defaults to pwd",
+			// 	Value:       ".",
+			// 	Destination: &path,
+			// },
 		},
 		Action: func(c *cli.Context) error {
 			if c.Args().Len() > 1 {
 				return errors.New("Too many arguments")
+			}
+
+			if c.Args().Len() == 1 {
+				path = c.Args().Get(0)
 			}
 
 			// TODO: warn user max depth exceeeded
@@ -99,6 +103,12 @@ type FormatStats struct {
 	maxFolderTreeWidth int
 	maxBranchWidth     int
 	maxGitStatsWidth   int
+	maxAheadWidth      int
+	maxBehindWidth     int
+	maxAddedWidth      int
+	maxRemovedWidth    int
+	maxModifiedWidth   int
+	maxUnstagedWidth   int
 }
 
 type GitStats struct {
@@ -182,14 +192,14 @@ func FilterNodes(node *Node) *Node {
 	return nil
 }
 
-func printDirTree(n *Node, stats FormatStats) {
-	Walk(n, func(n *Node) {
+func printDirTree(root *Node, formatStats FormatStats) {
+	Walk(root, func(n *Node) {
 		leftPad := strings.Repeat("  ", n.GetDepth())
 		folderTreeText := fmt.Sprintf("%s|-- %s", leftPad, n.folderName)
-		rep := stats.maxFolderTreeWidth - len(folderTreeText)
+		rep := formatStats.maxFolderTreeWidth - len(folderTreeText)
 		treePadding := strings.Repeat(" ", rep)
-		commitStats := prettyGitStats(n.gitStats)
-		branchPadding := strings.Repeat(" ", stats.maxBranchWidth-len(n.gitStats.currentBranch))
+		commitStats := prettyGitStats(n.gitStats, formatStats)
+		branchPadding := strings.Repeat(" ", formatStats.maxBranchWidth-len(n.gitStats.currentBranch))
 
 		fmt.Printf("%s%s %s%s %s\n",
 			folderTreeText,
@@ -200,33 +210,41 @@ func printDirTree(n *Node, stats FormatStats) {
 	})
 }
 
-func prettyGitStats(g GitStats) string {
-	ahead := fmt.Sprintf("\u2191%d", g.nCommitsAhead)
+func prettyGitStats(g GitStats, f FormatStats) string {
+	var pad string
+
+	pad = strings.Repeat(" ", f.maxAheadWidth-(len(string(g.nCommitsAhead))+1))
+	ahead := fmt.Sprintf("\u2191%d%s", g.nCommitsAhead, pad)
 	if g.nCommitsAhead > 0 {
 		ahead = colouredString(ahead, Green)
 	}
 
-	behind := fmt.Sprintf("\u2193%d", g.nCommitsBehind)
+	pad = strings.Repeat(" ", f.maxBehindWidth-(len(string(g.nCommitsBehind))+1))
+	behind := fmt.Sprintf("\u2193%d%s", g.nCommitsBehind, pad)
 	if g.nCommitsBehind > 0 {
 		behind = colouredString(behind, Red)
 	}
 
-	added := fmt.Sprintf("+%d", g.nFilesAdded)
+	pad = strings.Repeat(" ", f.maxAddedWidth-(len(string(g.nFilesAdded))+1))
+	added := fmt.Sprintf("+%d%s", g.nFilesAdded, pad)
 	if g.nFilesAdded > 0 {
 		added = colouredString(added, Green)
 	}
 
-	removed := fmt.Sprintf("-%d", g.nFilesRemoved)
+	pad = strings.Repeat(" ", f.maxRemovedWidth-(len(string(g.nFilesRemoved))+1))
+	removed := fmt.Sprintf("-%d%s", g.nFilesRemoved, pad)
 	if g.nFilesRemoved > 0 {
 		removed = colouredString(removed, Red)
 	}
 
-	modified := fmt.Sprintf("~%d", g.nFilesModified)
+	pad = strings.Repeat(" ", f.maxModifiedWidth-(len(string(g.nFilesModified))+1))
+	modified := fmt.Sprintf("~%d%s", g.nFilesModified, pad)
 	if g.nFilesModified > 0 {
 		modified = colouredString(modified, Yellow)
 	}
-	unstaged := fmt.Sprintf("x%d", g.nFilesUnstaged)
 
+	pad = strings.Repeat(" ", f.maxUnstagedWidth-(len(string(g.nFilesUnstaged))+1))
+	unstaged := fmt.Sprintf("x%d%s", g.nFilesUnstaged, pad)
 	if g.nFilesUnstaged > 0 {
 		unstaged = colouredString(unstaged, Red)
 	}
@@ -241,14 +259,6 @@ func prettyGitStats(g GitStats) string {
 		unstaged,
 	)
 
-	// text = text + fmt.Sprintf(" \u2191%s \u2193%s +%s -%s ~%s u%s",
-	// 	colouredInt(ahead, Green),
-	// 	colouredInt(behind, Red),
-	// 	colouredInt(added, Green),
-	// 	colouredInt(deleted, Red),
-	// 	colouredInt(modified, Yellow),
-	// 	colouredInt(unstaged, Red),
-	// )
 }
 
 func mainProcess(path string, command string, recurseDepth uint, shouldFetch bool) error {
@@ -265,6 +275,12 @@ func mainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 	FilterNodes(node)
 
 	formatStats := collectStats(node)
+	fmt.Println(formatStats.maxAheadWidth)
+	fmt.Println(formatStats.maxBehindWidth)
+	fmt.Println(formatStats.maxAddedWidth)
+	fmt.Println(formatStats.maxRemovedWidth)
+	fmt.Println(formatStats.maxModifiedWidth)
+	fmt.Println(formatStats.maxUnstagedWidth)
 	printDirTree(node, formatStats)
 
 	return nil
@@ -284,6 +300,7 @@ func collectStats(root *Node) FormatStats {
 				panic(err)
 			}
 			n.gitStats = gitStats
+			updateGitFormat(&formatStats, n.gitStats)
 
 			branchNameLen := len(gitStats.currentBranch)
 			if branchNameLen > formatStats.maxBranchWidth {
@@ -295,7 +312,38 @@ func collectStats(root *Node) FormatStats {
 			}
 		}
 	})
+
 	return formatStats
+}
+
+func updateGitFormat(formatStats *FormatStats, gitStats GitStats) {
+	//NOTE: adds one to account for the unicode char
+	//TODO: think this is broken with counting unicode chars in string
+	widthAhead := len(strconv.Itoa(gitStats.nCommitsAhead)) + 1
+	widthBehind := len(strconv.Itoa(gitStats.nCommitsBehind)) + 1
+	widthAdded := len(strconv.Itoa(gitStats.nFilesAdded)) + 1
+	widthRemoved := len(strconv.Itoa(gitStats.nFilesRemoved)) + 1
+	widthModified := len(strconv.Itoa(gitStats.nFilesModified)) + 1
+	widthUnstaged := len(strconv.Itoa(gitStats.nFilesUnstaged)) + 1
+
+	if widthAhead > formatStats.maxAheadWidth {
+		formatStats.maxAheadWidth = widthAhead
+	}
+	if widthBehind > formatStats.maxBehindWidth {
+		formatStats.maxBehindWidth = widthBehind
+	}
+	if widthAdded > formatStats.maxAddedWidth {
+		formatStats.maxAddedWidth = widthAdded
+	}
+	if widthRemoved > formatStats.maxRemovedWidth {
+		formatStats.maxRemovedWidth = widthRemoved
+	}
+	if widthModified > formatStats.maxModifiedWidth {
+		formatStats.maxModifiedWidth = widthModified
+	}
+	if widthUnstaged > formatStats.maxUnstagedWidth {
+		formatStats.maxUnstagedWidth = widthUnstaged
+	}
 }
 
 func getGitDirectories(node *Node, depth uint, recurseDepth uint, maxDirLength *int) {
