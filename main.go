@@ -318,7 +318,6 @@ func collectStats(root *Node) FormatStats {
 
 func updateGitFormat(formatStats *FormatStats, gitStats GitStats) {
 	//NOTE: adds one to account for the unicode char
-	//TODO: think this is broken with counting unicode chars in string
 	widthAhead := len(strconv.Itoa(gitStats.nCommitsAhead)) + 1
 	widthBehind := len(strconv.Itoa(gitStats.nCommitsBehind)) + 1
 	widthAdded := len(strconv.Itoa(gitStats.nFilesAdded)) + 1
