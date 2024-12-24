@@ -198,8 +198,8 @@ func printDirTree(root *Node, formatStats FormatStats) {
 		folderTreeText := fmt.Sprintf("%s|-- %s", leftPad, n.folderName)
 		rep := formatStats.maxFolderTreeWidth - len(folderTreeText)
 		treePadding := strings.Repeat(" ", rep)
-		commitStats := prettyGitStats(n.gitStats, formatStats)
 		branchPadding := strings.Repeat(" ", formatStats.maxBranchWidth-len(n.gitStats.currentBranch))
+		commitStats := prettyGitStats(n.gitStats, formatStats)
 
 		fmt.Printf("%s%s %s%s %s\n",
 			folderTreeText,
@@ -213,37 +213,37 @@ func printDirTree(root *Node, formatStats FormatStats) {
 func prettyGitStats(g GitStats, f FormatStats) string {
 	var pad string
 
-	pad = strings.Repeat(" ", f.maxAheadWidth-(len(string(g.nCommitsAhead))+1))
+	pad = strings.Repeat(" ", f.maxAheadWidth-(len(strconv.Itoa(g.nCommitsAhead))+1))
 	ahead := fmt.Sprintf("\u2191%d%s", g.nCommitsAhead, pad)
 	if g.nCommitsAhead > 0 {
 		ahead = colouredString(ahead, Green)
 	}
 
-	pad = strings.Repeat(" ", f.maxBehindWidth-(len(string(g.nCommitsBehind))+1))
+	pad = strings.Repeat(" ", f.maxBehindWidth-(len(strconv.Itoa(g.nCommitsBehind))+1))
 	behind := fmt.Sprintf("\u2193%d%s", g.nCommitsBehind, pad)
 	if g.nCommitsBehind > 0 {
 		behind = colouredString(behind, Red)
 	}
 
-	pad = strings.Repeat(" ", f.maxAddedWidth-(len(string(g.nFilesAdded))+1))
+	pad = strings.Repeat(" ", f.maxAddedWidth-(len(strconv.Itoa(g.nFilesAdded))+1))
 	added := fmt.Sprintf("+%d%s", g.nFilesAdded, pad)
 	if g.nFilesAdded > 0 {
 		added = colouredString(added, Green)
 	}
 
-	pad = strings.Repeat(" ", f.maxRemovedWidth-(len(string(g.nFilesRemoved))+1))
+	pad = strings.Repeat(" ", f.maxRemovedWidth-(len(strconv.Itoa(g.nFilesRemoved))+1))
 	removed := fmt.Sprintf("-%d%s", g.nFilesRemoved, pad)
 	if g.nFilesRemoved > 0 {
 		removed = colouredString(removed, Red)
 	}
 
-	pad = strings.Repeat(" ", f.maxModifiedWidth-(len(string(g.nFilesModified))+1))
+	pad = strings.Repeat(" ", f.maxModifiedWidth-(len(strconv.Itoa(g.nFilesModified))+1))
 	modified := fmt.Sprintf("~%d%s", g.nFilesModified, pad)
 	if g.nFilesModified > 0 {
 		modified = colouredString(modified, Yellow)
 	}
 
-	pad = strings.Repeat(" ", f.maxUnstagedWidth-(len(string(g.nFilesUnstaged))+1))
+	pad = strings.Repeat(" ", f.maxUnstagedWidth-(len(strconv.Itoa(g.nFilesUnstaged))+1))
 	unstaged := fmt.Sprintf("x%d%s", g.nFilesUnstaged, pad)
 	if g.nFilesUnstaged > 0 {
 		unstaged = colouredString(unstaged, Red)
