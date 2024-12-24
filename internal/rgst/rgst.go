@@ -1,91 +1,15 @@
-package main
+package rgst
 
 import (
-	"errors"
 	"fmt"
+	"github.com/jobodd/rgst/internal/colours"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"github.com/urfave/cli/v2"
 )
-
-const (
-	Red    = "\033[31m"
-	Green  = "\033[32m"
-	Yellow = "\033[33m"
-	Blue   = "\033[34m"
-	Reset  = "\033[0m"
-)
-
-func colouredInt(i int, colour string) string {
-	return colouredString(strconv.Itoa(i), colour)
-}
-func colouredString(s string, colour string) string {
-	return colour + s + Reset
-}
-
-func main() {
-	var shouldFetch bool
-	var recurseDepth uint
-	var path string
-	var command string
-
-	app := &cli.App{
-		Name:  "Recursive git status",
-		Usage: "Check the status of Git repositories in subdirectories",
-		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:        "fetch",
-				Aliases:     []string{"f"},
-				Usage:       "Fetch the latest changes from origin",
-				Destination: &shouldFetch,
-			},
-			&cli.UintFlag{
-				Name:        "depth",
-				Aliases:     []string{"d"},
-				Usage:       "Set the recursion depth to check for git repos",
-				Value:       0,
-				Destination: &recurseDepth,
-			},
-			&cli.StringFlag{
-				Name:        "command",
-				Aliases:     []string{"c", "cmd"},
-				Usage:       "Command to run in each directory",
-				Value:       "git status",
-				Destination: &command,
-			},
-			// &cli.StringFlag{
-			// 	Name:        "path",
-			// 	Aliases:     []string{"p"},
-			// 	Usage:       "Directory to process; defaults to pwd",
-			// 	Value:       ".",
-			// 	Destination: &path,
-			// },
-		},
-		Action: func(c *cli.Context) error {
-			if c.Args().Len() > 1 {
-				return errors.New("Too many arguments")
-			}
-
-			if c.Args().Len() == 1 {
-				path = c.Args().Get(0)
-			}
-
-			// TODO: warn user max depth exceeeded
-			recurseDepth = min(5, recurseDepth)
-			return mainProcess(path, command, recurseDepth, shouldFetch)
-		},
-	}
-
-	err := app.Run(os.Args)
-	if err != nil {
-		fmt.Println(err)
-	}
-}
 
 type Node struct {
 	folderName      string
@@ -216,37 +140,37 @@ func prettyGitStats(g GitStats, f FormatStats) string {
 	pad = strings.Repeat(" ", f.maxAheadWidth-(len(strconv.Itoa(g.nCommitsAhead))+1))
 	ahead := fmt.Sprintf("\u2191%d%s", g.nCommitsAhead, pad)
 	if g.nCommitsAhead > 0 {
-		ahead = colouredString(ahead, Green)
+		ahead = colours.ColouredString(ahead, colours.Green)
 	}
 
 	pad = strings.Repeat(" ", f.maxBehindWidth-(len(strconv.Itoa(g.nCommitsBehind))+1))
 	behind := fmt.Sprintf("\u2193%d%s", g.nCommitsBehind, pad)
 	if g.nCommitsBehind > 0 {
-		behind = colouredString(behind, Red)
+		behind = colours.ColouredString(behind, colours.Red)
 	}
 
 	pad = strings.Repeat(" ", f.maxAddedWidth-(len(strconv.Itoa(g.nFilesAdded))+1))
 	added := fmt.Sprintf("+%d%s", g.nFilesAdded, pad)
 	if g.nFilesAdded > 0 {
-		added = colouredString(added, Green)
+		added = colours.ColouredString(added, colours.Green)
 	}
 
 	pad = strings.Repeat(" ", f.maxRemovedWidth-(len(strconv.Itoa(g.nFilesRemoved))+1))
 	removed := fmt.Sprintf("-%d%s", g.nFilesRemoved, pad)
 	if g.nFilesRemoved > 0 {
-		removed = colouredString(removed, Red)
+		removed = colours.ColouredString(removed, colours.Red)
 	}
 
 	pad = strings.Repeat(" ", f.maxModifiedWidth-(len(strconv.Itoa(g.nFilesModified))+1))
 	modified := fmt.Sprintf("~%d%s", g.nFilesModified, pad)
 	if g.nFilesModified > 0 {
-		modified = colouredString(modified, Yellow)
+		modified = colours.ColouredString(modified, colours.Yellow)
 	}
 
 	pad = strings.Repeat(" ", f.maxUnstagedWidth-(len(strconv.Itoa(g.nFilesUnstaged))+1))
 	unstaged := fmt.Sprintf("x%d%s", g.nFilesUnstaged, pad)
 	if g.nFilesUnstaged > 0 {
-		unstaged = colouredString(unstaged, Red)
+		unstaged = colours.ColouredString(unstaged, colours.Red)
 	}
 
 	return fmt.Sprintf(
@@ -261,7 +185,7 @@ func prettyGitStats(g GitStats, f FormatStats) string {
 
 }
 
-func mainProcess(path string, command string, recurseDepth uint, shouldFetch bool) error {
+func MainProcess(path string, command string, recurseDepth uint, shouldFetch bool) error {
 	maxDirLength := 0
 
 	absolutePath, err := filepath.Abs(path)
@@ -275,12 +199,6 @@ func mainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 	FilterNodes(node)
 
 	formatStats := collectStats(node)
-	fmt.Println(formatStats.maxAheadWidth)
-	fmt.Println(formatStats.maxBehindWidth)
-	fmt.Println(formatStats.maxAddedWidth)
-	fmt.Println(formatStats.maxRemovedWidth)
-	fmt.Println(formatStats.maxModifiedWidth)
-	fmt.Println(formatStats.maxUnstagedWidth)
 	printDirTree(node, formatStats)
 
 	return nil

@@ -1,10 +1,19 @@
 module github.com/jobodd/rgst
 
-go 1.22.5
+go 1.22.7
+
+require github.com/urfave/cli/v2 v2.27.5
 
 require (
-	github.com/cpuguy83/go-md2man/v2 v2.0.4 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
-	github.com/urfave/cli/v2 v2.27.2 // indirect
-	github.com/xrash/smetrics v0.0.0-20240312152122-5f08fbb34913 // indirect
+	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 )
+
+// replace github.com/jobodd/rgst => ./
+
+// replace github.com/jobodd/rgst/internal => ./internal
+
+// replace github.com/jobodd/rgst/internal/rgst => ./internal/rgst
+
+replace github.com/jobodd/rgst/internal/colours => ./internal/colours
