@@ -198,7 +198,7 @@ func mainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 					fmt.Println("Fatal getting git stats")
 					panic(err)
 				}
-				text = text + fmt.Sprintf(" A%d B%d +%d -%d ~%d", ahead, behind, added, deleted, modified)
+				text = text + fmt.Sprintf(" \u2191%d \u2193%d +%d -%d ~%d", ahead, behind, added, deleted, modified)
 			}
 
 		}
