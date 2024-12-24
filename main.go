@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/urfave/cli/v2"
@@ -77,22 +78,11 @@ func main() {
 type Node struct {
 	folderName string
 	absPath    string
-	isGitRepo  bool
 	parent     *Node
 	children   []*Node
+	isGitRepo  bool
 }
 
-//	func (n Node) GetParentPath() string {
-//		if n.parent == nil {
-//			return n.folderName
-//		} else {
-//			return n.parent.GetFullPath() + "/"
-//		}
-//	}
-//
-//	func (n Node) GetFullPath() string {
-//		return n.GetParentPath() + n.folderName
-//	}
 func NewNode(folderName, absPath string, parent *Node) *Node {
 	return &Node{
 		folderName: folderName,
@@ -176,11 +166,25 @@ func mainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 	}
 	targetDir := filepath.Base(absolutePath)
 
+	// ahead, behind, added, deleted, modified, err := getGitStats(absolutePath)
+	// fmt.Println("Git stats")
+	// fmt.Printf("ahead: %d\n", ahead)
+	// fmt.Printf("behind: %d\n", behind)
+	// fmt.Printf("added: %d\n", added)
+	// fmt.Printf("deleted: %d\n", deleted)
+	// fmt.Printf("modified: %d\n", modified)
+
 	node := NewNode(targetDir, absolutePath, nil)
 	getGitDirectories(node, 0, recurseDepth, &maxDirLength)
 	FilterNodes(node)
 
 	maxTreeWidth := GetTreePadding(node)
+	// print headers
+	headers := "Dir"
+	headers = headers + strings.Repeat(" ", maxTreeWidth-len(headers)) + " " + "Branch"
+	fmt.Println(headers)
+
+	// print tree
 	Walk(node, func(n *Node) {
 		leftPad := strings.Repeat("  ", n.GetDepth())
 		text := fmt.Sprintf("%s|-- %s", leftPad, n.folderName)
@@ -189,7 +193,14 @@ func mainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 			if err != nil {
 				log.Fatal(err)
 			}
-			text = text + strings.Repeat(" ", maxTreeWidth-len(text)) + " git! "+ strings.ReplaceAll(branch, "\n", "")
+
+			text = text + strings.Repeat(" ", maxTreeWidth-len(text)) + " " + strings.ReplaceAll(branch, "\n", "")
+
+			ahead, behind, added, deleted, modified, err := getGitStats(n.absPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			text = text + fmt.Sprintf(" A%d B%d +%d -%d ~%d", ahead, behind, added, deleted, modified)
 		}
 		fmt.Printf("%s\n", text)
 	})
@@ -238,40 +249,16 @@ func getGitBranch(gitDirectory string) string {
 		log.Fatal(err)
 	}
 
-	branch, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").Output()
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Dir = gitDirectory
+
+	branchOutput, err := cmd.Output()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// err = os.Chdir("..")
-	return string(branch)
-}
-
-func checkGitStatus(gitDirectory string, shouldFetch bool, maxDirLength int, maxBranchLength int) error {
-	branch := getGitBranch(gitDirectory)
-
-	err := os.Chdir(gitDirectory)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if shouldFetch {
-		if err := exec.Command("git", "fetch").Run(); err != nil {
-			return err
-		}
-	}
-
-	status := checkUpToDate()
-	// status = strings.Replace(status, "\n", "", -1)
-	changes := checkChangesToCommit()
-	// changes = strings.Replace(changes, "\n", "", -1)
-	err = os.Chdir("..")
-
-	// print outputs
-	paddedDir := padText(gitDirectory, maxDirLength)
-	paddedBranch := padText(branch, maxBranchLength)
-	fmt.Printf("├──  %s %s %s %s\n", paddedDir, paddedBranch, status, changes)
-
-	return nil
+	return string(branchOutput)
 }
 
 func padText(s string, maxDirLength int) string {
@@ -300,28 +287,67 @@ func isGitDirectory(basePath string, directory fs.DirEntry) (bool, error) {
 	}
 	return info.IsDir(), nil
 }
-
-const MAX_STATUS_LENGTH = 14
-
-func checkUpToDate() string {
-	status := ""
-	cmd := exec.Command("git", "diff", "--quiet", "@{upstream}", "HEAD")
-	if err := cmd.Run(); err != nil {
-		//TODO: differentiate between not up to date and no upstream at all
-		status = padText("not up to date", MAX_STATUS_LENGTH)
-		status = fmt.Sprintf("%s%s%s  ", red, status, reset)
-	} else {
-		status = padText("up to date", MAX_STATUS_LENGTH)
-		status = fmt.Sprintf("%s%s%s  ", green, status, reset)
+func getGitStats(absDir string) (ahead int, behind int, added int, deleted int, modified int, err error) {
+	cmd := exec.Command("git", "remote", "-v")
+	cmd.Dir = absDir
+	remoteOutput, err := cmd.Output()
+	if err != nil {
+		return 0, 0, 0, 0, 0, fmt.Errorf("failed to get current branch: %w", err)
 	}
-	return status
-}
-
-func checkChangesToCommit() string {
-	cmd := exec.Command("git", "diff-index", "--quiet", "HEAD", "--")
-	if err := cmd.Run(); err != nil {
-		return fmt.Sprintf("%schanges to commit%s", red, reset)
-	} else {
-		return fmt.Sprintf("%sno changes to commit%s", green, reset)
+	wc := len(strings.Split(string(remoteOutput), "\n"))
+	if wc != 3 { // two lines ending \n gives a count of three
+		//TODO:
+		fmt.Printf("Remote count was: %d", wc)
+		return -99, -99, -99, -99, -99, nil
 	}
+
+	// Get the current branch
+	cmd = exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Dir = absDir
+	branchOutput, err := cmd.Output()
+	if err != nil {
+		return 0, 0, 0, 0, 0, fmt.Errorf("failed to get current branch: %w", err)
+	}
+	currentBranch := strings.TrimSpace(string(branchOutput))
+	// fmt.Printf("Current branch: %s", currentBranch)
+
+	// Get ahead/behind count
+	cmd = exec.Command("git", "rev-list", "--count", "--left-right", fmt.Sprintf("origin/%s...%s", currentBranch, currentBranch))
+	cmd.Dir = absDir
+
+	aheadBehindOutput, err := cmd.Output()
+	if err != nil {
+		return 0, 0, 0, 0, 0, fmt.Errorf("failed to get ahead/behind count: %w", err)
+	}
+	parts := strings.Fields(string(aheadBehindOutput))
+	if len(parts) == 2 {
+		behind, _ = strconv.Atoi(parts[0])
+		ahead, _ = strconv.Atoi(parts[1])
+	}
+
+	// Get lines added, deleted, and modified
+	cmd = exec.Command("git", "diff", "--stat", "HEAD")
+	cmd.Dir = absDir
+	diffOutput, err := cmd.Output()
+	if err != nil {
+		return 0, 0, 0, 0, 0, fmt.Errorf("failed to get diff stats: %w", err)
+	}
+	diffLines := strings.Split(string(diffOutput), "\n")
+	if len(diffLines) > 1 {
+		lastLine := diffLines[len(diffLines)-2] // Typically, the last non-blank line has the summary
+		if strings.Contains(lastLine, "insertions") || strings.Contains(lastLine, "deletions") {
+			words := strings.Fields(lastLine)
+			for i, word := range words {
+				if strings.HasSuffix(word, "insertion(+),") || strings.HasSuffix(word, "insertion(+)") {
+					added, _ = strconv.Atoi(words[i-1])
+				} else if strings.HasSuffix(word, "deletion(-),") || strings.HasSuffix(word, "deletion(-)") {
+					deleted, _ = strconv.Atoi(words[i-1])
+				} else if strings.HasPrefix(word, "modified,") {
+					modified, _ = strconv.Atoi(words[i-1])
+				}
+			}
+		}
+	}
+
+	return ahead, behind, added, deleted, modified, nil
 }
