@@ -198,10 +198,6 @@ func mainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 				panic(err)
 			} else if hasSingleRemote {
 				branch := getGitBranch(n.absPath)
-				if err != nil {
-					panic(err)
-				}
-
 				text = text + strings.Repeat(" ", maxTreeWidth-len(text)) + " " + strings.ReplaceAll(branch, "\n", "")
 
 				ahead, behind, added, deleted, modified, err := getGitStats(n.absPath)
@@ -335,9 +331,12 @@ func getGitStats(absDir string) (ahead int, behind int, added int, deleted int, 
 	cmd = exec.Command("git", "rev-list", "--count", "--left-right", fmt.Sprintf("origin/%s...%s", currentBranch, currentBranch))
 	cmd.Dir = absDir
 
-	aheadBehindOutput, err := cmd.Output()
+	aheadBehindOutput, err := cmd.CombinedOutput()
 	if err != nil {
-		return 0, 0, 0, 0, 0, fmt.Errorf("failed to get ahead/behind count: %w", err)
+		if strings.Contains(string(aheadBehindOutput), "unknown revision or path not in the working tree"){
+			return 0, 0, -99, -99, -99, nil
+		}
+		return 0, 0, 0, 0, 0, fmt.Errorf("failed to get ahead/behind count.\nBranch was: %s\nError was: %w", currentBranch, err)
 	}
 	parts := strings.Fields(string(aheadBehindOutput))
 	if len(parts) == 2 {
