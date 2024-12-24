@@ -168,7 +168,7 @@ func prettyGitStats(g GitStats, f FormatStats) string {
 	}
 
 	pad = strings.Repeat(" ", f.maxUnstagedWidth-(len(strconv.Itoa(g.nFilesUnstaged))+1))
-	unstaged := fmt.Sprintf("x%d%s", g.nFilesUnstaged, pad)
+	unstaged := fmt.Sprintf("U%d%s", g.nFilesUnstaged, pad)
 	if g.nFilesUnstaged > 0 {
 		unstaged = colours.ColouredString(unstaged, colours.Red)
 	}
@@ -399,29 +399,64 @@ func getGitStats(absDir string) (GitStats, error) {
 		gitStats.nCommitsAhead, _ = strconv.Atoi(parts[1])
 	}
 
-	// Get lines added, deleted, and modified
-	cmd = exec.Command("git", "diff", "--stat", "HEAD")
+	cmd = exec.Command("git", "status", "--porcelain")
 	cmd.Dir = absDir
-	diffOutput, err := cmd.Output()
+	statusPorcelainOut, err := cmd.Output()
 	if err != nil {
-		return gitStats, fmt.Errorf("failed to get diff stats: %w", err)
+		return gitStats, fmt.Errorf("Failed to get git status --porcelain", err)
 	}
-	diffLines := strings.Split(string(diffOutput), "\n")
-	if len(diffLines) > 1 {
-		lastLine := diffLines[len(diffLines)-2] // Typically, the last non-blank line has the summary
-		if strings.Contains(lastLine, "insertions") || strings.Contains(lastLine, "deletions") {
-			words := strings.Fields(lastLine)
-			for i, word := range words {
-				if strings.HasSuffix(word, "insertion(+),") || strings.HasSuffix(word, "insertion(+)") {
-					gitStats.nFilesAdded, _ = strconv.Atoi(words[i-1])
-				} else if strings.HasSuffix(word, "deletion(-),") || strings.HasSuffix(word, "deletion(-)") {
-					gitStats.nFilesRemoved, _ = strconv.Atoi(words[i-1])
-				} else if strings.HasPrefix(word, "modified,") {
-					gitStats.nFilesModified, _ = strconv.Atoi(words[i-1])
-				}
-			}
+	gitStats.nFilesAdded,
+		gitStats.nFilesRemoved,
+		gitStats.nFilesModified,
+		gitStats.nFilesUnstaged = gitFileStatus(string(statusPorcelainOut))
+
+	return gitStats, nil
+}
+
+func gitFileStatus(statusOutput string) (int, int, int, int) {
+	added, removed, modified, unstaged := 0, 0, 0, 0
+
+	for _, line := range strings.Split(statusOutput, "\n") {
+		if len(line) < 2 {
+			continue
+		}
+
+		switch line[:2] {
+		case "A ": // staged
+			added++
+		case " D": // deleted
+			removed++
+		case " M":
+			unstaged++
+		case "M ":
+			modified++
+		case "MM":
+			modified++
+			unstaged++
+		case "??": // untracked?
+			unstaged++
+		case "T ": // type changed
+			modified++
+		case " T": // type changed
+			unstaged++
+		case "TT": // type changed
+			modified++
+			unstaged++
+		case "R ":
+			modified++
+		case " R":
+			unstaged++
+		case "RR":
+			modified++
+			unstaged++
+		case "!!": //ignored
+			fmt.Printf("File ignored: %s\n", line)
+		case "UU": // conflicted
+			fmt.Printf("File conflict: %s\n", line)
+		default:
+			fmt.Printf("Unhandled file status: %s\n", line)
 		}
 	}
 
-	return gitStats, nil
+	return added, removed, modified, unstaged
 }
