@@ -171,14 +171,6 @@ func mainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 	}
 	targetDir := filepath.Base(absolutePath)
 
-	// ahead, behind, added, deleted, modified, err := getGitStats(absolutePath)
-	// fmt.Println("Git stats")
-	// fmt.Printf("ahead: %d\n", ahead)
-	// fmt.Printf("behind: %d\n", behind)
-	// fmt.Printf("added: %d\n", added)
-	// fmt.Printf("deleted: %d\n", deleted)
-	// fmt.Printf("modified: %d\n", modified)
-
 	node := NewNode(targetDir, absolutePath, nil)
 	getGitDirectories(node, 0, recurseDepth, &maxDirLength)
 	FilterNodes(node)
@@ -195,6 +187,7 @@ func mainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 		text := fmt.Sprintf("%s|-- %s", leftPad, n.folderName)
 		if n.isGitRepo {
 			if hasSingleRemote, err := gitDirHasSingleRemote(n.absPath); err != nil {
+				fmt.Printf("panic checking: %s", n.absPath)
 				panic(err)
 			} else if hasSingleRemote {
 				branch := getGitBranch(n.absPath)
@@ -220,6 +213,16 @@ func getGitDirectories(node *Node, depth uint, recurseDepth uint, maxDirLength *
 		// fmt.Println("Returning")
 		return
 	}
+
+	// check for the initial node
+	if node.parent == nil {
+		dirPath := filepath.Join(node.absPath)
+		gitPath := filepath.Join(dirPath, ".git")
+		if _, err := os.Stat(gitPath); err == nil {
+			node.isGitRepo = true
+		}
+	}
+
 	// fmt.Printf("Will read path: %s\n", node.absPath)
 	entries, err := os.ReadDir(node.absPath)
 	// entries, err := os.ReadDir(node.folderName)
@@ -241,8 +244,6 @@ func getGitDirectories(node *Node, depth uint, recurseDepth uint, maxDirLength *
 				childNodePtr.isGitRepo = true
 			}
 
-			// fmt.Println("recursing")
-			// recurse
 			getGitDirectories(childNodePtr, depth+1, recurseDepth, maxDirLength)
 		}
 	}
