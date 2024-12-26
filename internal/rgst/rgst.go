@@ -2,26 +2,17 @@ package rgst
 
 import (
 	"fmt"
-	"github.com/jobodd/rgst/internal/colours"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-)
 
-type Node struct {
-	folderName      string
-	absPath         string
-	parent          *Node
-	children        []*Node
-	isGitRepo       bool
-	gitStats        GitStats
-	folderTreeWidth int
-	branchNameWidth int
-	gitStatsWidth   int
-}
+	"github.com/jobodd/rgst/internal/colours"
+	"github.com/jobodd/rgst/internal/git"
+	t "github.com/jobodd/rgst/internal/tree"
+)
 
 type FormatStats struct {
 	maxFolderTreeWidth int
@@ -35,141 +26,60 @@ type FormatStats struct {
 	maxUnstagedWidth   int
 }
 
-type GitStats struct {
-	currentBranch  string
-	hasRemote      bool
-	nCommitsAhead  int
-	nCommitsBehind int
-	nFilesAdded    int
-	nFilesRemoved  int
-	nFilesModified int
-	nFilesUnstaged int
-}
-
-func (g *GitStats) StatsLen() int {
-	return len(string(g.nCommitsAhead)) +
-		len(string(g.nCommitsBehind)) +
-		len(string(g.nFilesAdded)) +
-		len(string(g.nFilesRemoved)) +
-		len(string(g.nFilesModified)) +
-		len(string(g.nFilesUnstaged))
-}
-
-func NewNode(folderName, absPath string, parent *Node) *Node {
-	return &Node{
-		folderName: folderName,
-		absPath:    absPath,
-		isGitRepo:  false,
-		parent:     parent,
-		children:   []*Node{},
-	}
-}
-func (n *Node) GetDepth() int {
-	var depth int
-	GetDepth(n, &depth)
-	return depth
-}
-
-func GetDepth(n *Node, depthPtr *int) {
-	if n.parent == nil {
-		return
-	}
-	(*depthPtr)++
-	GetDepth(n.parent, depthPtr)
-}
-
-func Walk(node *Node, visit func(*Node)) {
-	if node == nil {
-		return
-	}
-
-	visit(node)
-
-	for _, child := range node.children {
-		Walk(child, visit)
-	}
-}
-
-func FilterNodes(node *Node) *Node {
-	if node == nil {
-		return nil
-	}
-
-	// Filter children recursively.
-	var filteredChildren []*Node
-	for _, child := range node.children {
-		filteredChild := FilterNodes(child)
-		if filteredChild != nil {
-			filteredChildren = append(filteredChildren, filteredChild)
-		}
-	}
-
-	// Update the node's children to the filtered list.
-	node.children = filteredChildren
-
-	// Check if this node or any of its children have Foo set to true.
-	if node.isGitRepo || len(filteredChildren) > 0 {
-		return node
-	}
-
-	// If neither this node nor its children have Foo set to true, remove it.
-	return nil
-}
-
-func printDirTree(root *Node, formatStats FormatStats) {
-	Walk(root, func(n *Node) {
+func printDirTree(root *t.Node, formatStats FormatStats) {
+	t.Walk(root, func(n *t.Node) {
 		leftPad := strings.Repeat("  ", n.GetDepth())
-		folderTreeText := fmt.Sprintf("%s|-- %s", leftPad, n.folderName)
+		folderTreeText := fmt.Sprintf("%s|-- %s", leftPad, n.FolderName)
 		rep := formatStats.maxFolderTreeWidth - len(folderTreeText)
 		treePadding := strings.Repeat(" ", rep)
-		branchPadding := strings.Repeat(" ", formatStats.maxBranchWidth-len(n.gitStats.currentBranch))
-		commitStats := prettyGitStats(n.gitStats, formatStats)
+		branchPadding := strings.Repeat(" ", formatStats.maxBranchWidth-len(n.GitStats.CurrentBranch))
+		commitStats := prettyGitStats(n.GitStats, formatStats)
 
 		fmt.Printf("%s%s %s%s %s\n",
 			folderTreeText,
 			treePadding,
-			n.gitStats.currentBranch,
+			n.GitStats.CurrentBranch,
 			branchPadding,
 			commitStats)
 	})
 }
 
-func prettyGitStats(g GitStats, f FormatStats) string {
+func prettyGitStats(g git.GitStats, f FormatStats) string {
 	var pad string
 
-	pad = strings.Repeat(" ", f.maxAheadWidth-(len(strconv.Itoa(g.nCommitsAhead))+1))
-	ahead := fmt.Sprintf("\u2191%d%s", g.nCommitsAhead, pad)
-	if g.nCommitsAhead > 0 {
+	pad = strings.Repeat(" ", f.maxAheadWidth-(len(strconv.Itoa(g.NCommitsAhead))+1))
+	ahead := fmt.Sprintf("\u2191%d%s", g.NCommitsAhead, pad)
+	if g.NCommitsAhead > 0 {
 		ahead = colours.ColouredString(ahead, colours.Green)
 	}
 
-	pad = strings.Repeat(" ", f.maxBehindWidth-(len(strconv.Itoa(g.nCommitsBehind))+1))
-	behind := fmt.Sprintf("\u2193%d%s", g.nCommitsBehind, pad)
-	if g.nCommitsBehind > 0 {
+	pad = strings.Repeat(" ", f.maxBehindWidth-(len(strconv.Itoa(g.NCommitsBehind))+1))
+	behind := fmt.Sprintf("\u2193%d%s", g.NCommitsBehind, pad)
+	if g.NCommitsBehind > 0 {
 		behind = colours.ColouredString(behind, colours.Red)
 	}
 
-	pad = strings.Repeat(" ", f.maxAddedWidth-(len(strconv.Itoa(g.nFilesAdded))+1))
-	added := fmt.Sprintf("+%d%s", g.nFilesAdded, pad)
-	if g.nFilesAdded > 0 {
+	pad = strings.Repeat(" ", f.maxAddedWidth-(len(strconv.Itoa(g.NFilesAdded))+1))
+	added := fmt.Sprintf("+%d%s", g.NFilesAdded, pad)
+	if g.NFilesAdded > 0 {
 		added = colours.ColouredString(added, colours.Green)
 	}
 
-	pad = strings.Repeat(" ", f.maxRemovedWidth-(len(strconv.Itoa(g.nFilesRemoved))+1))
-	removed := fmt.Sprintf("-%d%s", g.nFilesRemoved, pad)
-	if g.nFilesRemoved > 0 {
+	pad = strings.Repeat(" ", f.maxRemovedWidth-(len(strconv.Itoa(g.NFilesRemoved))+1))
+	removed := fmt.Sprintf("-%d%s", g.NFilesRemoved, pad)
+	if g.NFilesRemoved > 0 {
 		removed = colours.ColouredString(removed, colours.Red)
 	}
 
-	pad = strings.Repeat(" ", f.maxModifiedWidth-(len(strconv.Itoa(g.nFilesModified))+1))
-	modified := fmt.Sprintf("~%d%s", g.nFilesModified, pad)
-	if g.nFilesModified > 0 {
+	pad = strings.Repeat(" ", f.maxModifiedWidth-(len(strconv.Itoa(g.NFilesModified))+1))
+	modified := fmt.Sprintf("~%d%s", g.NFilesModified, pad)
+	if g.NFilesModified > 0 {
 		modified = colours.ColouredString(modified, colours.Yellow)
 	}
 
-	pad = strings.Repeat(" ", f.maxUnstagedWidth-(len(strconv.Itoa(g.nFilesUnstaged))+1))
-	unstaged := fmt.Sprintf("U%d%s", g.nFilesUnstaged, pad)
-	if g.nFilesUnstaged > 0 {
+	pad = strings.Repeat(" ", f.maxUnstagedWidth-(len(strconv.Itoa(g.NFilesUnstaged))+1))
+	unstaged := fmt.Sprintf("U%d%s", g.NFilesUnstaged, pad)
+	if g.NFilesUnstaged > 0 {
 		unstaged = colours.ColouredString(unstaged, colours.Red)
 	}
 
@@ -194,9 +104,9 @@ func MainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 	}
 	targetDir := filepath.Base(absolutePath)
 
-	node := NewNode(targetDir, absolutePath, nil)
+	node := t.NewNode(targetDir, absolutePath, nil)
 	getGitDirectories(node, 0, recurseDepth, &maxDirLength)
-	FilterNodes(node)
+	t.FilterNodes(node)
 
 	formatStats := collectStats(node)
 	printDirTree(node, formatStats)
@@ -204,23 +114,23 @@ func MainProcess(path string, command string, recurseDepth uint, shouldFetch boo
 	return nil
 }
 
-func collectStats(root *Node) FormatStats {
+func collectStats(root *t.Node) FormatStats {
 	var formatStats FormatStats
-	Walk(root, func(n *Node) {
-		n.folderTreeWidth = len(n.folderName) + 4 + (n.GetDepth() * 2)
-		if n.folderTreeWidth > formatStats.maxFolderTreeWidth {
-			formatStats.maxFolderTreeWidth = n.folderTreeWidth
+	t.Walk(root, func(n *t.Node) {
+		n.FolderTreeWidth = len(n.FolderName) + 4 + (n.GetDepth() * 2)
+		if n.FolderTreeWidth > formatStats.maxFolderTreeWidth {
+			formatStats.maxFolderTreeWidth = n.FolderTreeWidth
 		}
 
-		if n.isGitRepo {
-			gitStats, err := getGitStats(n.absPath)
+		if n.IsGitRepo {
+			gitStats, err := getGitStats(n.AbsPath)
 			if err != nil {
 				panic(err)
 			}
-			n.gitStats = gitStats
-			updateGitFormat(&formatStats, n.gitStats)
+			n.GitStats = gitStats
+			updateGitFormat(&formatStats, n.GitStats)
 
-			branchNameLen := len(gitStats.currentBranch)
+			branchNameLen := len(gitStats.CurrentBranch)
 			if branchNameLen > formatStats.maxBranchWidth {
 				formatStats.maxBranchWidth = branchNameLen
 			}
@@ -234,14 +144,14 @@ func collectStats(root *Node) FormatStats {
 	return formatStats
 }
 
-func updateGitFormat(formatStats *FormatStats, gitStats GitStats) {
+func updateGitFormat(formatStats *FormatStats, gitStats git.GitStats) {
 	//NOTE: adds one to account for the unicode char
-	widthAhead := len(strconv.Itoa(gitStats.nCommitsAhead)) + 1
-	widthBehind := len(strconv.Itoa(gitStats.nCommitsBehind)) + 1
-	widthAdded := len(strconv.Itoa(gitStats.nFilesAdded)) + 1
-	widthRemoved := len(strconv.Itoa(gitStats.nFilesRemoved)) + 1
-	widthModified := len(strconv.Itoa(gitStats.nFilesModified)) + 1
-	widthUnstaged := len(strconv.Itoa(gitStats.nFilesUnstaged)) + 1
+	widthAhead := len(strconv.Itoa(gitStats.NCommitsAhead)) + 1
+	widthBehind := len(strconv.Itoa(gitStats.NCommitsBehind)) + 1
+	widthAdded := len(strconv.Itoa(gitStats.NFilesAdded)) + 1
+	widthRemoved := len(strconv.Itoa(gitStats.NFilesRemoved)) + 1
+	widthModified := len(strconv.Itoa(gitStats.NFilesModified)) + 1
+	widthUnstaged := len(strconv.Itoa(gitStats.NFilesUnstaged)) + 1
 
 	if widthAhead > formatStats.maxAheadWidth {
 		formatStats.maxAheadWidth = widthAhead
@@ -263,34 +173,34 @@ func updateGitFormat(formatStats *FormatStats, gitStats GitStats) {
 	}
 }
 
-func getGitDirectories(node *Node, depth uint, recurseDepth uint, maxDirLength *int) {
+func getGitDirectories(node *t.Node, depth uint, recurseDepth uint, maxDirLength *int) {
 	if depth > recurseDepth {
 		return
 	}
 
 	// check for the initial node
-	if node.parent == nil {
-		dirPath := filepath.Join(node.absPath)
+	if node.Parent == nil {
+		dirPath := filepath.Join(node.AbsPath)
 		gitPath := filepath.Join(dirPath, ".git")
 		if _, err := os.Stat(gitPath); err == nil {
-			node.isGitRepo = true
+			node.IsGitRepo = true
 		}
 	}
 
-	entries, err := os.ReadDir(node.absPath)
+	entries, err := os.ReadDir(node.AbsPath)
 	if err != nil {
 		panic(err)
 	}
 
 	for _, entry := range entries {
 		if entry.IsDir() {
-			dirPath := filepath.Join(node.absPath, entry.Name())
+			dirPath := filepath.Join(node.AbsPath, entry.Name())
 			gitPath := filepath.Join(dirPath, ".git")
 
-			childNodePtr := NewNode(entry.Name(), dirPath, node)
-			node.children = append(node.children, childNodePtr)
+			childNodePtr := t.NewNode(entry.Name(), dirPath, node)
+			node.Children = append(node.Children, childNodePtr)
 			if _, err := os.Stat(gitPath); err == nil {
-				childNodePtr.isGitRepo = true
+				childNodePtr.IsGitRepo = true
 			}
 
 			getGitDirectories(childNodePtr, depth+1, recurseDepth, maxDirLength)
@@ -356,15 +266,15 @@ func gitDirHasSingleRemote(absDir string) (bool, error) {
 	return wc == 3, nil
 }
 
-func getGitStats(absDir string) (GitStats, error) {
-	var gitStats GitStats
+func getGitStats(absDir string) (git.GitStats, error) {
+	var gitStats git.GitStats
 
-	gitStats.currentBranch = strings.ReplaceAll(getGitBranch(absDir), "\n", "")
+	gitStats.CurrentBranch = strings.ReplaceAll(getGitBranch(absDir), "\n", "")
 	if hasSingle, err := gitDirHasSingleRemote(absDir); err != nil {
 		return gitStats, err
 	} else {
 		//TODO: handle multiple remotes
-		gitStats.hasRemote = hasSingle
+		gitStats.HasRemote = hasSingle
 	}
 
 	// Get the current branch
@@ -374,7 +284,7 @@ func getGitStats(absDir string) (GitStats, error) {
 	if err != nil {
 		return gitStats, fmt.Errorf("failed to get current branch: %w", err)
 	}
-	gitStats.currentBranch = strings.TrimSpace(string(branchOutput))
+	gitStats.CurrentBranch = strings.TrimSpace(string(branchOutput))
 
 	// Get ahead/behind count
 	cmd = exec.Command("git",
@@ -382,8 +292,8 @@ func getGitStats(absDir string) (GitStats, error) {
 		"--count",
 		"--left-right",
 		fmt.Sprintf("origin/%s...%s",
-			gitStats.currentBranch,
-			gitStats.currentBranch))
+			gitStats.CurrentBranch,
+			gitStats.CurrentBranch))
 	cmd.Dir = absDir
 
 	aheadBehindOutput, err := cmd.CombinedOutput()
@@ -391,12 +301,12 @@ func getGitStats(absDir string) (GitStats, error) {
 		if strings.Contains(string(aheadBehindOutput), "unknown revision or path not in the working tree") {
 			return gitStats, nil
 		}
-		return gitStats, fmt.Errorf("failed to get ahead/behind count.\nBranch was: %s\nError was: %w", gitStats.currentBranch, err)
+		return gitStats, fmt.Errorf("failed to get ahead/behind count.\nBranch was: %s\nError was: %w", gitStats.CurrentBranch, err)
 	}
 	parts := strings.Fields(string(aheadBehindOutput))
 	if len(parts) == 2 {
-		gitStats.nCommitsBehind, _ = strconv.Atoi(parts[0])
-		gitStats.nCommitsAhead, _ = strconv.Atoi(parts[1])
+		gitStats.NCommitsBehind, _ = strconv.Atoi(parts[0])
+		gitStats.NCommitsAhead, _ = strconv.Atoi(parts[1])
 	}
 
 	cmd = exec.Command("git", "status", "--porcelain")
@@ -405,10 +315,10 @@ func getGitStats(absDir string) (GitStats, error) {
 	if err != nil {
 		return gitStats, fmt.Errorf("Failed to get git status --porcelain", err)
 	}
-	gitStats.nFilesAdded,
-		gitStats.nFilesRemoved,
-		gitStats.nFilesModified,
-		gitStats.nFilesUnstaged = gitFileStatus(string(statusPorcelainOut))
+	gitStats.NFilesAdded,
+		gitStats.NFilesRemoved,
+		gitStats.NFilesModified,
+		gitStats.NFilesUnstaged = gitFileStatus(string(statusPorcelainOut))
 
 	return gitStats, nil
 }
