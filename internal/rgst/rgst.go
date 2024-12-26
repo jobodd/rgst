@@ -14,6 +14,13 @@ import (
 	t "github.com/jobodd/rgst/internal/tree"
 )
 
+type Options struct {
+	ShouldFetch  bool
+	RecurseDepth uint
+	Path         string
+	Command      string
+}
+
 type FormatStats struct {
 	maxFolderTreeWidth int
 	maxBranchWidth     int
@@ -95,17 +102,17 @@ func prettyGitStats(g git.GitStats, f FormatStats) string {
 
 }
 
-func MainProcess(path string, command string, recurseDepth uint, shouldFetch bool) error {
+func MainProcess(opts Options) error {
 	maxDirLength := 0
 
-	absolutePath, err := filepath.Abs(path)
+	absolutePath, err := filepath.Abs(opts.Path)
 	if err != nil {
 		panic(err)
 	}
 	targetDir := filepath.Base(absolutePath)
 
 	node := t.NewNode(targetDir, absolutePath, nil)
-	getGitDirectories(node, 0, recurseDepth, &maxDirLength)
+	getGitDirectories(node, 0, opts.RecurseDepth, &maxDirLength)
 	t.FilterNodes(node)
 
 	formatStats := collectStats(node)

@@ -10,48 +10,41 @@ import (
 )
 
 func main() {
-	var shouldFetch bool
-	var recurseDepth uint
-	var path string
-	var command string
+	var rgstOpts rgst.Options
 
 	app := &cli.App{
 		Name:  "Recursive git status",
 		Usage: "Check the status of Git repositories in subdirectories",
 		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:        "fetch",
-				Aliases:     []string{"f"},
-				Usage:       "Fetch the latest changes from origin",
-				Destination: &shouldFetch,
-			},
 			&cli.UintFlag{
 				Name:        "depth",
 				Aliases:     []string{"d"},
 				Usage:       "Set the recursion depth to check for git repos",
 				Value:       0,
-				Destination: &recurseDepth,
+				Destination: &rgstOpts.RecurseDepth,
 			},
-			&cli.StringFlag{
-				Name:        "command",
-				Aliases:     []string{"c", "cmd"},
-				Usage:       "Command to run in each directory",
-				Value:       "git status",
-				Destination: &command,
+			&cli.BoolFlag{
+				Name:        "fetch",
+				Aliases:     []string{"f"},
+				Usage:       "Fetch the latest changes from origin",
+				Destination: &rgstOpts.ShouldFetch,
 			},
+			// &cli.StringFlag{
+			// 	Name:        "command",
+			// 	Aliases:     []string{"c", "cmd"},
+			// 	Usage:       "Command to run in each directory",
+			// 	Value:       "git status",
+			// 	Destination: &rgstOpts.command,
+			// },
 		},
 		Action: func(c *cli.Context) error {
-			if c.Args().Len() > 1 {
-				return errors.New("Too many arguments")
-			}
-
-			if c.Args().Len() == 1 {
-				path = c.Args().Get(0)
+			if err := checkArgs(c, &rgstOpts); err != nil {
+				return err
 			}
 
 			// TODO: warn user max depth exceeeded
-			recurseDepth = min(5, recurseDepth)
-			return rgst.MainProcess(path, command, recurseDepth, shouldFetch)
+			rgstOpts.RecurseDepth = min(5, rgstOpts.RecurseDepth)
+			return rgst.MainProcess(rgstOpts)
 		},
 	}
 
@@ -59,4 +52,16 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
+}
+
+func checkArgs(c *cli.Context, rgstOpts *rgst.Options) error {
+	if c.Args().Len() > 1 {
+		return errors.New("Too many arguments")
+	}
+
+	if c.Args().Len() == 1 {
+		rgstOpts.Path = c.Args().Get(0)
+	}
+
+	return nil
 }
