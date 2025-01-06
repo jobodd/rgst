@@ -69,6 +69,8 @@ jobs:
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       id: upload_release_asset
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: bin/rgst
