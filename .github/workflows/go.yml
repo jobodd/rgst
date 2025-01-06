@@ -1,0 +1,54 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.20'
+
+    - name: Checkout Code 
+      uses: actions/checkout@v4
+      
+    - name: Determine latest tag
+      id: get_latest_tag
+      run: |
+        git fetch --tags
+        latest_tag=$(git describe --abbrev=0 --tags `git merge-base -a origin/master HEAD`)
+        echo "::set-output name=latest_tag::$latest_tag"
+
+    - name: Build
+      run: go build -o bin/rgst cmd/rgst/main.go
+
+    # - name: Test
+    #   run: go test -v ./...
+
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      id: create_release
+      with:
+          tag_name: ${{ steps.get_latest_tag.outputs.latest_tag }}
+          release_name: Release ${{ steps.get_latest_tag.outputs.latest_tag }}
+          draft: false
+          prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      id: upload_release_asset
+      with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: bin/rgst
+          asset_name: rgst
+          asset_content_type: application/octet-stream 
