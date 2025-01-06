@@ -1,13 +1,8 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
 name: Go
 
 on:
   push:
-    branches: [ "master" ]
-  # pull_request:
-  #   branches: [ "master" ]
+    branches: [ "master" ] # runs on push or on PR merge
 
 jobs:
 
@@ -21,18 +16,46 @@ jobs:
 
     - name: Checkout Code 
       uses: actions/checkout@v4
-      with:
-        fetch_depth: 0
-      
-    - name: Determine latest tag
-      id: get_latest_tag
+
+# Increment semantic version
+    - name: Increment semantic version
+      id: increment-version
       run: |
-        git --version
-        git fetch --tags
-        git merge-base -a origin/master HEAD
-        git describe --abbrev=0 --tags `git merge-base -a origin/master HEAD`
-        latest_tag=$(git describe --abbrev=0 --tags `git merge-base -a origin/master HEAD`)
-        echo "::set-output name=latest_tag::$latest_tag"
+          # Extract the current version from a VERSION file
+          CURRENT_VERSION=$(cat VERSION)
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Parse and increment the patch version
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+          PATCH=$((PATCH + 1))
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          
+          echo "New version: $NEW_VERSION"
+          
+          # Save the new version back to the VERSION file
+          echo "$NEW_VERSION" > VERSION
+
+          # Expose the new version as an output for later steps
+          echo "new_version=$NEW_VERSION" >> $GITHUB_ENV
+
+    # Commit the updated version
+    - name: Commit updated version
+      run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add VERSION
+          git commit -m "Increment version to $NEW_VERSION"
+          git push origin HEAD:master
+      
+    # - name: Determine latest tag
+    #   id: get_latest_tag
+    #   run: |
+    #     git --version
+    #     git fetch --tags
+    #     git merge-base -a origin/master HEAD
+    #     git describe --abbrev=0 --tags `git merge-base -a origin/master HEAD`
+    #     latest_tag=$(git describe --abbrev=0 --tags `git merge-base -a origin/master HEAD`)
+    #     echo "::set-output name=latest_tag::$latest_tag"
 
     - name: Build
       run: go build -o bin/rgst cmd/rgst/main.go
