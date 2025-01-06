@@ -12,7 +12,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.20'
+        go-version: '1.22.7'
 
     - name: Checkout Code 
       uses: actions/checkout@v4
@@ -67,8 +67,8 @@ jobs:
       uses: actions/create-release@v1
       id: create_release
       with:
-          tag_name: ${{ steps.get_latest_tag.outputs.latest_tag }}
-          release_name: Release ${{ steps.get_latest_tag.outputs.latest_tag }}
+          tag_name: ${{ env.new_version }}
+          release_name: Release ${{ env.new_version }}
           draft: false
           prerelease: false
 
