@@ -26,6 +26,8 @@ jobs:
       id: get_latest_tag
       run: |
         git fetch --tags
+        git merge-base -a origin/master HEAD
+        git describe --abbrev=0 --tags `git merge-base -a origin/master HEAD`
         latest_tag=$(git describe --abbrev=0 --tags `git merge-base -a origin/master HEAD`)
         echo "::set-output name=latest_tag::$latest_tag"
 
