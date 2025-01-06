@@ -25,6 +25,7 @@ jobs:
     - name: Determine latest tag
       id: get_latest_tag
       run: |
+        git --version
         git fetch --tags
         git merge-base -a origin/master HEAD
         git describe --abbrev=0 --tags `git merge-base -a origin/master HEAD`
