@@ -38,14 +38,6 @@ jobs:
           # Expose the new version as an output for later steps
           echo "new_version=$NEW_VERSION" >> $GITHUB_ENV
 
-    # Commit the updated version
-    - name: Commit updated version
-      run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add VERSION
-          git commit -m "Increment version to $NEW_VERSION"
-          git push origin HEAD:master
       
     # - name: Determine latest tag
     #   id: get_latest_tag
@@ -80,3 +72,12 @@ jobs:
           asset_path: bin/rgst
           asset_name: rgst
           asset_content_type: application/octet-stream 
+
+    # Commit the updated version
+    - name: Commit updated version
+      run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add VERSION
+          git commit -m "Increment version to $NEW_VERSION"
+          git push origin HEAD:master
