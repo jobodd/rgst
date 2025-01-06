@@ -43,6 +43,8 @@ jobs:
           git add VERSION
           git commit -m "Increment version to ${{env.new_version}}"
           git tag v${{env.new_version}} -m "Release $NEW_VERSION"
+          git push origin HEAD:master
+          git push origin tag v${{env.new_version}}
       
     # - name: Determine latest tag
     #   id: get_latest_tag
@@ -85,8 +87,6 @@ jobs:
           asset_name: rgst
           asset_content_type: application/octet-stream 
 
-    # Commit the updated version
-    - name: Commit updated version
-      run: |
-          git push origin HEAD:master
-          git push origin tag v${{env.new_version}}
+    # # Commit the updated version
+    # - name: Commit updated version
+    #   run: |
