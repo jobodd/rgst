@@ -1,0 +1,92 @@
+name: Go
+
+on:
+  push:
+    branches: [ "master" ] # runs on push or on PR merge
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22.7'
+
+    - name: Checkout Code 
+      uses: actions/checkout@v4
+
+# Increment semantic version
+    - name: Increment semantic version
+      id: increment-version
+      run: |
+          # Extract the current version from a VERSION file
+          CURRENT_VERSION=$(cat VERSION)
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Parse and increment the patch version
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+          PATCH=$((PATCH + 1))
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          
+          echo "New version: $NEW_VERSION"
+          
+          # Save the new version back to the VERSION file
+          echo "$NEW_VERSION" > VERSION
+
+          # Expose the new version as an output for later steps
+          echo "new_version=$NEW_VERSION" >> $GITHUB_ENV
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add VERSION
+          git commit -m "Increment version to $NEW_VERSION"
+          git tag v$NEW_VERSION -m "Release $NEW_VERSION"
+          git push origin HEAD:master
+          git push origin tag v$NEW_VERSION
+      
+    # - name: Determine latest tag
+    #   id: get_latest_tag
+    #   run: |
+    #     git --version
+    #     git fetch --tags
+    #     git merge-base -a origin/master HEAD
+    #     git describe --abbrev=0 --tags `git merge-base -a origin/master HEAD`
+    #     latest_tag=$(git describe --abbrev=0 --tags `git merge-base -a origin/master HEAD`)
+    #     echo "::set-output name=latest_tag::$latest_tag"
+
+    - name: Build
+      run: |
+          date -u +'%Y-%m-%dT%H:%M:%SZ'
+          git describe --tags --always
+          go build -ldflags "-X 'main.Version=$(git describe --tags --always)' -X 'main.BuildTime=$(date -u +'%Y-%m-%dT%H:%M:%SZ')'" -o bin/rgst cmd/rgst/main.go
+
+    # - name: Test
+    #   run: go test -v ./...
+
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      id: create_release
+      with:
+          tag_name: ${{ env.new_version }}
+          release_name: Release ${{ env.new_version }}
+          draft: false
+          prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      id: upload_release_asset
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: bin/rgst
+          asset_name: rgst
+          asset_content_type: application/octet-stream 
+
+    # # Commit the updated version
+    # - name: Commit updated version
+    #   run: |
