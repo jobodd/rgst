@@ -23,11 +23,6 @@ type Options struct {
 func MainProcess(opts Options) error {
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.TabIndent)
-	// w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.Debug)
-	// fmt.Fprintln(w, "a\tb\tc")
-	// fmt.Fprintln(w, "aa\tbb\tcc")
-	// fmt.Fprintln(w, "aaa\t") // trailing tab
-	// fmt.Fprintln(w, "aaaa\tdddd\teeee")
 	w.Flush()
 	maxDirLength := 0
 
