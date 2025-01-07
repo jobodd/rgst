@@ -10,6 +10,13 @@ import (
 	"github.com/jobodd/rgst/internal/colours"
 )
 
+type GitOptions struct {
+	ShouldFetch bool
+	ShouldPull  bool
+	ShowFiles   bool
+	Command     string
+}
+
 type GitStats struct {
 	CurrentBranch  string
 	HasRemote      bool

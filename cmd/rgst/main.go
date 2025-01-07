@@ -27,32 +27,32 @@ func main() {
 				Name:        "fetch",
 				Aliases:     []string{"f"},
 				Usage:       "Fetch the latest changes from remote",
-				Destination: &rgstOpts.ShouldFetch,
+				Destination: &rgstOpts.GitOptions.ShouldFetch,
 			},
 			&cli.BoolFlag{
 				Name:        "pull",
 				Aliases:     []string{"p"},
 				Usage:       "Pull the latest changes from remote",
-				Destination: &rgstOpts.ShouldPull,
+				Destination: &rgstOpts.GitOptions.ShouldPull,
 			},
 			&cli.BoolFlag{
 				Name:        "show-files",
 				Aliases:     []string{},
 				Usage:       "Show the list of files changed for each git directory",
-				Destination: &rgstOpts.ShowFiles,
+				Destination: &rgstOpts.GitOptions.ShowFiles,
 			},
 			&cli.StringFlag{
 				Name:        "regular-expression",
 				Aliases:     []string{"e"},
 				Usage:       "Filter directories with an regular expression",
 				Value:       "",
-				Destination: &rgstOpts.RegExp,
+				Destination: &rgstOpts.FilterOptions.RegExp,
 			},
 			&cli.BoolFlag{
 				Name:        "invert-match",
 				Aliases:     []string{"v"},
 				Usage:       "Invert the regular expression match",
-				Destination: &rgstOpts.ShouldInvertRegExp,
+				Destination: &rgstOpts.FilterOptions.ShouldInvertRegExp,
 			},
 			// &cli.StringFlag{
 			// 	Name:        "command",
@@ -86,6 +86,22 @@ func checkArgs(c *cli.Context, rgstOpts *rgst.Options) error {
 
 	if c.Args().Len() == 1 {
 		rgstOpts.Path = c.Args().Get(0)
+	}
+
+	if err := checkFilterOptions(rgstOpts); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func checkFilterOptions(rgstOpts *rgst.Options) error {
+	if rgstOpts.FilterOptions.RegExp != "" {
+		rgstOpts.FilterOptions.ShouldFilter = true
+	} else if rgstOpts.FilterOptions.ShouldInvertRegExp {
+		return errors.New("Can't invert without a match. (See --help for flags: --regular-expression and --invert-match)")
+	} else {
+		rgstOpts.FilterOptions.ShouldFilter = false
 	}
 
 	return nil

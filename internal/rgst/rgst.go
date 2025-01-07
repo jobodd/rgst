@@ -14,16 +14,10 @@ import (
 )
 
 type Options struct {
-	Path               string
-	RecurseDepth       uint
-	ShouldFetch        bool
-	ShouldPull         bool
-	ShowFiles          bool
-	ShouldFilter       bool
-	RegExp             string
-	ShouldInvertRegExp bool
-
-	Command string
+	Path          string
+	RecurseDepth  uint
+	GitOptions    git.GitOptions
+	FilterOptions t.FilterOptions
 }
 
 func MainProcess(opts Options) error {
@@ -40,7 +34,9 @@ func MainProcess(opts Options) error {
 
 	node := t.NewNode(targetDir, absolutePath, nil)
 	t.GetGitDirectories(node, 0, opts.RecurseDepth, &maxDirLength)
-	t.FilterNodes(node)
+	if t.FilterNodes(node, opts.FilterOptions) == nil {
+		return nil
+	}
 
 	formatStats := collectStats(node)
 	printDirTree(w, node, formatStats)

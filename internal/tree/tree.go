@@ -2,8 +2,10 @@ package tree
 
 import (
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/jobodd/rgst/internal/git"
 )
@@ -18,6 +20,12 @@ type Node struct {
 	FolderTreeWidth int
 	BranchNameWidth int
 	GitStatsWidth   int
+}
+
+type FilterOptions struct {
+	ShouldFilter       bool
+	RegExp             string
+	ShouldInvertRegExp bool
 }
 
 func NewNode(folderName, absPath string, parent *Node) *Node {
@@ -55,7 +63,7 @@ func Walk(node *Node, visit func(*Node)) {
 	}
 }
 
-func FilterNodes(node *Node) *Node {
+func FilterNodes(node *Node, filterOpts FilterOptions) *Node {
 	if node == nil {
 		return nil
 	}
@@ -63,7 +71,7 @@ func FilterNodes(node *Node) *Node {
 	// Filter children recursively.
 	var filteredChildren []*Node
 	for _, child := range node.Children {
-		filteredChild := FilterNodes(child)
+		filteredChild := FilterNodes(child, filterOpts)
 		if filteredChild != nil {
 			filteredChildren = append(filteredChildren, filteredChild)
 		}
@@ -72,12 +80,31 @@ func FilterNodes(node *Node) *Node {
 	// Update the node's children to the filtered list.
 	node.Children = filteredChildren
 
-	// Check if this node or any of its children have Foo set to true.
-	if node.IsGitRepo || len(filteredChildren) > 0 {
+	// Check if this node matches
+	keepNode := false
+	if node.IsGitRepo {
+		keepNode = true
+
+		if filterOpts.ShouldFilter {
+			m, err := regexp.MatchString(filterOpts.RegExp, node.FolderName)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if !m {
+				keepNode = false
+			}
+
+			if filterOpts.ShouldInvertRegExp {
+				keepNode = !keepNode
+			}
+		}
+	}
+
+	// Keep the node if it matches, or has any matching children
+	if keepNode || len(filteredChildren) > 0 {
 		return node
 	}
 
-	// If neither this node nor its children have Foo set to true, remove it.
 	return nil
 }
 
