@@ -1,6 +1,12 @@
 package tree
 
-import "github.com/jobodd/rgst/internal/git"
+import (
+	"io/fs"
+	"os"
+	"path/filepath"
+
+	"github.com/jobodd/rgst/internal/git"
+)
 
 type Node struct {
 	FolderName      string
@@ -73,4 +79,49 @@ func FilterNodes(node *Node) *Node {
 
 	// If neither this node nor its children have Foo set to true, remove it.
 	return nil
+}
+
+func isGitDirectory(basePath string, directory fs.DirEntry) (bool, error) {
+	fp := filepath.Join(basePath, directory.Name(), ".git")
+	info, err := os.Stat(fp)
+	if err != nil {
+		return false, err
+	}
+	return info.IsDir(), nil
+}
+
+func GetGitDirectories(node *Node, depth uint, recurseDepth uint, maxDirLength *int) {
+	if depth > recurseDepth {
+		return
+	}
+
+	// check for the initial node
+	if node.Parent == nil {
+		dirPath := filepath.Join(node.AbsPath)
+		gitPath := filepath.Join(dirPath, ".git")
+		if _, err := os.Stat(gitPath); err == nil {
+			node.IsGitRepo = true
+		}
+	}
+
+	entries, err := os.ReadDir(node.AbsPath)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			dirPath := filepath.Join(node.AbsPath, entry.Name())
+			gitPath := filepath.Join(dirPath, ".git")
+
+			childNodePtr := NewNode(entry.Name(), dirPath, node)
+			node.Children = append(node.Children, childNodePtr)
+			if _, err := os.Stat(gitPath); err == nil {
+				childNodePtr.IsGitRepo = true
+			}
+
+			GetGitDirectories(childNodePtr, depth+1, recurseDepth, maxDirLength)
+		}
+	}
+
 }
