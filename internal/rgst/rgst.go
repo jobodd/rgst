@@ -2,9 +2,12 @@ package rgst
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"text/tabwriter"
 
 	"github.com/jobodd/rgst/internal/git"
 	t "github.com/jobodd/rgst/internal/tree"
@@ -18,6 +21,14 @@ type Options struct {
 }
 
 func MainProcess(opts Options) error {
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.TabIndent)
+	// w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.Debug)
+	// fmt.Fprintln(w, "a\tb\tc")
+	// fmt.Fprintln(w, "aa\tbb\tcc")
+	// fmt.Fprintln(w, "aaa\t") // trailing tab
+	// fmt.Fprintln(w, "aaaa\tdddd\teeee")
+	w.Flush()
 	maxDirLength := 0
 
 	absolutePath, err := filepath.Abs(opts.Path)
@@ -31,26 +42,25 @@ func MainProcess(opts Options) error {
 	t.FilterNodes(node)
 
 	formatStats := collectStats(node)
-	printDirTree(node, formatStats)
+	printDirTree(w, node, formatStats)
+	w.Flush()
 
 	return nil
 }
 
-func printDirTree(root *t.Node, formatStats git.FormatStats) {
+func printDirTree(w *tabwriter.Writer, root *t.Node, formatStats git.FormatStats) {
 	t.Walk(root, func(n *t.Node) {
 		leftPad := strings.Repeat("  ", n.GetDepth())
 		folderTreeText := fmt.Sprintf("%s|-- %s", leftPad, n.FolderName)
-		rep := formatStats.MaxFolderTreeWidth - len(folderTreeText)
-		treePadding := strings.Repeat(" ", rep)
-		branchPadding := strings.Repeat(" ", formatStats.MaxBranchWidth-len(n.GitStats.CurrentBranch))
 		commitStats := git.PrettyGitStats(n.GitStats, formatStats)
 
-		fmt.Printf("%s%s %s%s %s\n",
-			folderTreeText,
-			treePadding,
-			n.GitStats.CurrentBranch,
-			branchPadding,
-			commitStats)
+		var line string
+		if n.IsGitRepo {
+			line = fmt.Sprintf("%s\t%s\t%s", folderTreeText, n.GitStats.CurrentBranch, commitStats)
+		} else {
+			line = fmt.Sprintf("%s\t\t", folderTreeText)
+		}
+		fmt.Fprintln(w, line)
 	})
 }
 
