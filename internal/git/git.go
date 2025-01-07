@@ -179,46 +179,50 @@ func getGitBranch(gitDirectory string) string {
 }
 
 func PrettyGitStats(g GitStats, f FormatStats) string {
-	var pad string
-
-	pad = strings.Repeat(" ", f.MaxAheadWidth-(len(strconv.Itoa(g.NCommitsAhead))+1))
-	ahead := fmt.Sprintf("\u2191%d%s", g.NCommitsAhead, pad)
+	ahead := fmt.Sprintf("\u2191%d", g.NCommitsAhead)
 	if g.NCommitsAhead > 0 {
 		ahead = colours.ColouredString(ahead, colours.Green)
+	} else {
+		ahead = colours.ColouredString(ahead, colours.White)
 	}
 
-	pad = strings.Repeat(" ", f.MaxBehindWidth-(len(strconv.Itoa(g.NCommitsBehind))+1))
-	behind := fmt.Sprintf("\u2193%d%s", g.NCommitsBehind, pad)
+	behind := fmt.Sprintf("\u2193%d", g.NCommitsBehind)
 	if g.NCommitsBehind > 0 {
 		behind = colours.ColouredString(behind, colours.Red)
+	} else {
+		behind = colours.ColouredString(behind, colours.White)
 	}
 
-	pad = strings.Repeat(" ", f.MaxAddedWidth-(len(strconv.Itoa(g.NFilesAdded))+1))
-	added := fmt.Sprintf("+%d%s", g.NFilesAdded, pad)
+	added := fmt.Sprintf("+%d", g.NFilesAdded)
 	if g.NFilesAdded > 0 {
 		added = colours.ColouredString(added, colours.Green)
+	} else {
+		added = colours.ColouredString(added, colours.White)
 	}
 
-	pad = strings.Repeat(" ", f.MaxRemovedWidth-(len(strconv.Itoa(g.NFilesRemoved))+1))
-	removed := fmt.Sprintf("-%d%s", g.NFilesRemoved, pad)
+	removed := fmt.Sprintf("-%d", g.NFilesRemoved)
 	if g.NFilesRemoved > 0 {
 		removed = colours.ColouredString(removed, colours.Red)
+	} else {
+		removed = colours.ColouredString(removed, colours.White)
 	}
 
-	pad = strings.Repeat(" ", f.MaxModifiedWidth-(len(strconv.Itoa(g.NFilesModified))+1))
-	modified := fmt.Sprintf("~%d%s", g.NFilesModified, pad)
+	modified := fmt.Sprintf("~%d", g.NFilesModified)
 	if g.NFilesModified > 0 {
 		modified = colours.ColouredString(modified, colours.Yellow)
+	} else {
+		modified = colours.ColouredString(modified, colours.White)
 	}
 
-	pad = strings.Repeat(" ", f.MaxUnstagedWidth-(len(strconv.Itoa(g.NFilesUnstaged))+1))
-	unstaged := fmt.Sprintf("U%d%s", g.NFilesUnstaged, pad)
+	unstaged := fmt.Sprintf("U%d", g.NFilesUnstaged)
 	if g.NFilesUnstaged > 0 {
 		unstaged = colours.ColouredString(unstaged, colours.Red)
+	} else {
+		unstaged = colours.ColouredString(unstaged, colours.White)
 	}
 
 	return fmt.Sprintf(
-		" %s %s %s %s %s %s",
+		"%s\t%s\t%s\t%s\t%s\t%s\t",
 		ahead,
 		behind,
 		added,

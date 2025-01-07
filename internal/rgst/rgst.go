@@ -14,12 +14,12 @@ import (
 )
 
 type Options struct {
-	Path         string
-	RecurseDepth uint
-	ShouldFetch  bool
-	ShouldPull   bool
-	ShowFiles    bool
-
+	Path               string
+	RecurseDepth       uint
+	ShouldFetch        bool
+	ShouldPull         bool
+	ShowFiles          bool
+	ShouldFilter       bool
 	RegExp             string
 	ShouldInvertRegExp bool
 
