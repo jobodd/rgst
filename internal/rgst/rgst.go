@@ -14,10 +14,16 @@ import (
 )
 
 type Options struct {
-	ShouldFetch  bool
-	RecurseDepth uint
 	Path         string
-	Command      string
+	RecurseDepth uint
+	ShouldFetch  bool
+	ShouldPull   bool
+	ShowFiles    bool
+
+	RegExp             string
+	ShouldInvertRegExp bool
+
+	Command string
 }
 
 func MainProcess(opts Options) error {
