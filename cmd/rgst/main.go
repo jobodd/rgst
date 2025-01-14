@@ -38,7 +38,7 @@ func main() {
 			&cli.BoolFlag{
 				Name:        "files",
 				Aliases:     []string{},
-				Usage:       "Show the list of files changed for each git directory",
+				Usage:       "Show the list of files changed for each git directory, each prefixed with the `git status --porcelain` status formatting",
 				Destination: &rgstOpts.GitOptions.ShowFiles,
 			},
 			&cli.StringFlag{
