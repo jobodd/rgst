@@ -30,6 +30,12 @@ func main() {
 				Destination: &rgstOpts.GitOptions.ShouldFetch,
 			},
 			&cli.BoolFlag{
+				Name:        "fetch-all",
+				Aliases:     []string{""},
+				Usage:       "Fetch the latest changes from remote, all branches",
+				Destination: &rgstOpts.GitOptions.ShouldFetch,
+			},
+			&cli.BoolFlag{
 				Name:        "pull",
 				Aliases:     []string{"p"},
 				Usage:       "Pull the latest changes from remote",
