@@ -39,13 +39,13 @@ func MainProcess(opts Options) error {
 	}
 
 	formatStats := collectStats(node)
-	printDirTree(w, node, formatStats)
+	printDirTree(w, node, formatStats, opts.GitOptions)
 	w.Flush()
 
 	return nil
 }
 
-func printDirTree(w *tabwriter.Writer, root *t.Node, formatStats git.FormatStats) {
+func printDirTree(w *tabwriter.Writer, root *t.Node, formatStats git.FormatStats, gitOpts git.GitOptions) {
 	t.Walk(root, func(n *t.Node) {
 		leftPad := strings.Repeat("  ", n.GetDepth())
 		folderTreeText := fmt.Sprintf("%s|-- %s", leftPad, n.FolderName)
@@ -58,6 +58,17 @@ func printDirTree(w *tabwriter.Writer, root *t.Node, formatStats git.FormatStats
 			line = fmt.Sprintf("%s\t\t", folderTreeText)
 		}
 		fmt.Fprintln(w, line)
+
+		// check if we want to print files as well
+		if gitOpts.ShowFiles {
+			if len(n.GitStats.ChangedFiles) > 0 {
+				fmt.Printf("n changed files was: %d\n", len(n.GitStats.ChangedFiles))
+				for _, line := range n.GitStats.ChangedFiles {
+					fileLine := fmt.Sprintf("%s   |--%s", leftPad, line)
+					fmt.Fprintln(w, fileLine)
+				}
+			}
+		}
 	})
 }
 

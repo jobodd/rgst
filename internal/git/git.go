@@ -26,6 +26,7 @@ type GitStats struct {
 	NFilesRemoved  int
 	NFilesModified int
 	NFilesUnstaged int
+	ChangedFiles   []string
 }
 
 type FormatStats struct {
@@ -49,14 +50,10 @@ func (g *GitStats) StatsLen() int {
 		len(strconv.Itoa(g.NFilesUnstaged))
 }
 
-func GitFileStatus(statusOutput string) (int, int, int, int) {
+func GitFileStatus(porcelainLines []string) (int, int, int, int) {
 	added, removed, modified, unstaged := 0, 0, 0, 0
 
-	for _, line := range strings.Split(statusOutput, "\n") {
-		if len(line) < 2 {
-			continue
-		}
-
+	for _, line := range porcelainLines {
 		switch line[:2] {
 		case "A ": // staged
 			added++
@@ -144,12 +141,19 @@ func GetGitStats(absDir string) (GitStats, error) {
 	cmd.Dir = absDir
 	statusPorcelainOut, err := cmd.Output()
 	if err != nil {
-		return gitStats, fmt.Errorf("Failed to get git status --porcelain", err)
+		return gitStats, fmt.Errorf("Failed to get git status --porcelain. %s", err)
 	}
+	porcelainStatus := strings.TrimSpace(string(statusPorcelainOut))
+	// porcelainStatus := string(statusPorcelainOut)
+	gitStats.ChangedFiles = strings.Split(porcelainStatus, "\n")
+	if len(gitStats.ChangedFiles) == 1 && gitStats.ChangedFiles[0] == "" {
+		gitStats.ChangedFiles = []string{}
+	}
+
 	gitStats.NFilesAdded,
 		gitStats.NFilesRemoved,
 		gitStats.NFilesModified,
-		gitStats.NFilesUnstaged = GitFileStatus(string(statusPorcelainOut))
+		gitStats.NFilesUnstaged = GitFileStatus(gitStats.ChangedFiles)
 
 	return gitStats, nil
 }
