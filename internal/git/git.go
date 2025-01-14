@@ -82,7 +82,7 @@ func GitFileStatus(porcelainLines []string) (int, int, int, int) {
 		switch line[:4] {
 		case "[A ]": // staged
 			added++
-		case "[D ", " D]": // deleted
+		case "[D ]", "[ D]": // deleted
 			removed++
 		case "[ M]":
 			unstaged++
