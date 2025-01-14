@@ -73,7 +73,13 @@ func main() {
 				return err
 			}
 
-			// TODO: warn user max depth exceeeded
+			MAX_RECURSE_DEPTH := 5
+			fmt.Printf(
+				"Warning: Depth of %d exceeds max recursion limit of %d.\nLimiting to %d\n\n",
+				rgstOpts.RecurseDepth,
+				MAX_RECURSE_DEPTH,
+				MAX_RECURSE_DEPTH,
+			)
 			rgstOpts.RecurseDepth = min(5, rgstOpts.RecurseDepth)
 			return rgst.MainProcess(rgstOpts)
 		},
