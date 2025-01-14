@@ -36,7 +36,7 @@ func main() {
 				Destination: &rgstOpts.GitOptions.ShouldPull,
 			},
 			&cli.BoolFlag{
-				Name:        "show-files",
+				Name:        "files",
 				Aliases:     []string{},
 				Usage:       "Show the list of files changed for each git directory",
 				Destination: &rgstOpts.GitOptions.ShowFiles,
