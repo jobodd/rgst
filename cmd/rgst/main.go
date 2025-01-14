@@ -59,32 +59,6 @@ func main() {
 				Aliases:     []string{"v"},
 				Usage:       "Invert the regular expression match",
 				Destination: &rgstOpts.FilterOptions.ShouldInvertRegExp,
->>>>>>> 35ee1e6151481ccb32bb570b71efef7b4548fe50
-			},
-			&cli.BoolFlag{
-				Name:        "pull",
-				Aliases:     []string{"p"},
-				Usage:       "Pull the latest changes from remote",
-				Destination: &rgstOpts.ShouldPull,
-			},
-			&cli.BoolFlag{
-				Name:        "show-files",
-				Aliases:     []string{},
-				Usage:       "Show the list of files changed for each git directory",
-				Destination: &rgstOpts.ShowFiles,
-			},
-			&cli.StringFlag{
-				Name:        "regular-expression",
-				Aliases:     []string{"e"},
-				Usage:       "Filter directories with an regular expression",
-				Value:       "",
-				Destination: &rgstOpts.RegExp,
-			},
-			&cli.BoolFlag{
-				Name:        "invert-match",
-				Aliases:     []string{"v"},
-				Usage:       "Invert the regular expression match",
-				Destination: &rgstOpts.ShouldInvertRegExp,
 			},
 			// &cli.StringFlag{
 			// 	Name:        "command",
