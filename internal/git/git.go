@@ -10,6 +10,14 @@ import (
 	"github.com/jobodd/rgst/internal/colours"
 )
 
+type GitOptions struct {
+	ShouldFetch    bool
+	ShouldFetchAll bool
+	ShouldPull     bool
+	ShowFiles      bool
+	Command        string
+}
+
 type GitStats struct {
 	CurrentBranch  string
 	HasRemote      bool
@@ -19,6 +27,7 @@ type GitStats struct {
 	NFilesRemoved  int
 	NFilesModified int
 	NFilesUnstaged int
+	ChangedFiles   []string
 }
 
 type FormatStats struct {
@@ -42,48 +51,68 @@ func (g *GitStats) StatsLen() int {
 		len(strconv.Itoa(g.NFilesUnstaged))
 }
 
-func GitFileStatus(statusOutput string) (int, int, int, int) {
+func UpdateDirectory(absPath string, opts GitOptions) {
+	var cmd *exec.Cmd
+	if opts.ShouldPull {
+		cmd = exec.Command("git", "pull")
+	} else if opts.ShouldFetchAll {
+		cmd = exec.Command("git", "fetch", "--all", "--no-recurse-submodules")
+	} else {
+		cmd = exec.Command("git", "fetch", "--no-recurse-submodules")
+	}
+
+	cmd.Dir = absPath
+	out, err := cmd.Output()
+
+	if err != nil {
+		// fmt.Println("failed to get current branch: %w")
+		//TODO: add to msg
+	} else {
+		if len(out) == 0 {
+			//TODO: add to msg
+		}
+	}
+}
+
+func GitFileStatus(porcelainLines []string) (int, int, int, int) {
 	added, removed, modified, unstaged := 0, 0, 0, 0
 
-	for _, line := range strings.Split(statusOutput, "\n") {
-		if len(line) < 2 {
-			continue
-		}
-
-		switch line[:2] {
-		case "A ": // staged
+	//TODO: this was rushed; sanity check these
+	for _, line := range porcelainLines {
+		switch line[:4] {
+		case "[A ]": // staged
 			added++
-		case " D": // deleted
+		case "[D ", " D]": // deleted
 			removed++
-		case " M":
+		case "[ M]":
 			unstaged++
-		case "M ":
+		case "[M ]":
 			modified++
-		case "MM":
-			modified++
-			unstaged++
-		case "??": // untracked?
-			unstaged++
-		case "T ": // type changed
-			modified++
-		case " T": // type changed
-			unstaged++
-		case "TT": // type changed
+		case "[MM]":
 			modified++
 			unstaged++
-		case "R ":
-			modified++
-		case " R":
+		case "[??]": // untracked?
 			unstaged++
-		case "RR":
+		case "[T ]": // type changed
+			modified++
+		case "[ T]": // type changed
+			unstaged++
+		case "[TT]": // type changed
 			modified++
 			unstaged++
-		case "!!": //ignored
+		case "[R ]":
+			modified++
+		case "[ R]":
+			unstaged++
+		case "[RR]":
+			modified++
+			unstaged++
+		case "[!!]": //ignored
 			fmt.Printf("File ignored: %s\n", line)
-		case "UU": // conflicted
+		case "[UU]": // conflicted
 			fmt.Printf("File conflict: %s\n", line)
 		default:
-			fmt.Printf("Unhandled file status: %s\n", line)
+			fmt.Printf("Unhandled file status: `%s`\n", line)
 		}
 	}
 
@@ -137,12 +166,26 @@ func GetGitStats(absDir string) (GitStats, error) {
 	cmd.Dir = absDir
 	statusPorcelainOut, err := cmd.Output()
 	if err != nil {
-		return gitStats, fmt.Errorf("Failed to get git status --porcelain", err)
+		return gitStats, fmt.Errorf("Failed to get git status --porcelain. %s", err)
 	}
+	porcelainStatus := strings.TrimRight(string(statusPorcelainOut), " \n")
+	gitStats.ChangedFiles = strings.Split(porcelainStatus, "\n")
+	if len(gitStats.ChangedFiles) == 1 && gitStats.ChangedFiles[0] == "" {
+		gitStats.ChangedFiles = []string{}
+	} else {
+		for i := 0; i < len(gitStats.ChangedFiles); i++ {
+			gitStats.ChangedFiles[i] = fmt.Sprintf(
+				"[%s]%s",
+				gitStats.ChangedFiles[i][0:2],
+				gitStats.ChangedFiles[i][2:],
+			)
+		}
+	}
+
 	gitStats.NFilesAdded,
 		gitStats.NFilesRemoved,
 		gitStats.NFilesModified,
-		gitStats.NFilesUnstaged = GitFileStatus(string(statusPorcelainOut))
+		gitStats.NFilesUnstaged = GitFileStatus(gitStats.ChangedFiles)
 
 	return gitStats, nil
 }

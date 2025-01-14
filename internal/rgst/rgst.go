@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"text/tabwriter"
 
@@ -14,58 +15,59 @@ import (
 )
 
 type Options struct {
-	Path               string
-	RecurseDepth       uint
-	ShouldFetch        bool
-	ShouldPull         bool
-	ShowFiles          bool
-	ShouldFilter       bool
-	RegExp             string
-	ShouldInvertRegExp bool
-
-	Command string
+	Path          string
+	RecurseDepth  uint
+	GitOptions    git.GitOptions
+	FilterOptions t.FilterOptions
 }
 
 func MainProcess(opts Options) error {
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.TabIndent)
-	w.Flush()
 	maxDirLength := 0
 
+	// figure out the base path
 	absolutePath, err := filepath.Abs(opts.Path)
 	if err != nil {
 		panic(err)
 	}
 	targetDir := filepath.Base(absolutePath)
 
+	// create the directory node structure
 	node := t.NewNode(targetDir, absolutePath, nil)
 	t.GetGitDirectories(node, 0, opts.RecurseDepth, &maxDirLength)
-	t.FilterNodes(node)
+	if t.FilterNodes(node, opts.FilterOptions) == nil {
+		return nil
+	}
 
-	formatStats := collectStats(node)
-	printDirTree(w, node, formatStats)
+	if opts.GitOptions.ShouldFetch || opts.GitOptions.ShouldFetchAll || opts.GitOptions.ShouldPull {
+		updateGitRepos(node, opts.GitOptions)
+	}
+
+	// update the git stats for each directory
+	formatStats := collectGitStats(node)
+	printDirTree(w, node, formatStats, opts.GitOptions)
 	w.Flush()
 
 	return nil
 }
 
-func printDirTree(w *tabwriter.Writer, root *t.Node, formatStats git.FormatStats) {
-	t.Walk(root, func(n *t.Node) {
-		leftPad := strings.Repeat("  ", n.GetDepth())
-		folderTreeText := fmt.Sprintf("%s|-- %s", leftPad, n.FolderName)
-		commitStats := git.PrettyGitStats(n.GitStats, formatStats)
+func updateGitRepos(root *t.Node, gitOptions git.GitOptions) {
+	var wg sync.WaitGroup
 
-		var line string
+	t.Walk(root, func(n *t.Node) {
 		if n.IsGitRepo {
-			line = fmt.Sprintf("%s\t%s\t%s", folderTreeText, n.GitStats.CurrentBranch, commitStats)
-		} else {
-			line = fmt.Sprintf("%s\t\t", folderTreeText)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				git.UpdateDirectory(n.AbsPath, gitOptions)
+			}()
 		}
-		fmt.Fprintln(w, line)
 	})
+	wg.Wait()
 }
 
-func collectStats(root *t.Node) git.FormatStats {
+func collectGitStats(root *t.Node) git.FormatStats {
 	var formatStats git.FormatStats
 	t.Walk(root, func(n *t.Node) {
 		n.FolderTreeWidth = len(n.FolderName) + 4 + (n.GetDepth() * 2)
@@ -93,6 +95,32 @@ func collectStats(root *t.Node) git.FormatStats {
 	})
 
 	return formatStats
+}
+
+func printDirTree(w *tabwriter.Writer, root *t.Node, formatStats git.FormatStats, gitOpts git.GitOptions) {
+	t.Walk(root, func(n *t.Node) {
+		leftPad := strings.Repeat("  ", n.GetDepth())
+		folderTreeText := fmt.Sprintf("%s|-- %s", leftPad, n.FolderName)
+		commitStats := git.PrettyGitStats(n.GitStats, formatStats)
+
+		var line string
+		if n.IsGitRepo {
+			line = fmt.Sprintf("%s\t%s\t%s", folderTreeText, n.GitStats.CurrentBranch, commitStats)
+		} else {
+			line = fmt.Sprintf("%s\t\t", folderTreeText)
+		}
+		fmt.Fprintln(w, line)
+
+		// check if we want to print files as well
+		if gitOpts.ShowFiles {
+			if len(n.GitStats.ChangedFiles) > 0 {
+				for _, line := range n.GitStats.ChangedFiles {
+					fileLine := fmt.Sprintf("%s   |-- %s", leftPad, line)
+					fmt.Fprintln(w, fileLine)
+				}
+			}
+		}
+	})
 }
 
 func updateGitFormat(formatStats *git.FormatStats, gitStats git.GitStats) {
