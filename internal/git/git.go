@@ -30,18 +30,6 @@ type GitStats struct {
 	ChangedFiles   []string
 }
 
-type FormatStats struct {
-	MaxFolderTreeWidth int
-	MaxBranchWidth     int
-	MaxGitStatsWidth   int
-	MaxAheadWidth      int
-	MaxBehindWidth     int
-	MaxAddedWidth      int
-	MaxRemovedWidth    int
-	MaxModifiedWidth   int
-	MaxUnstagedWidth   int
-}
-
 func (g *GitStats) StatsLen() int {
 	return len(strconv.Itoa(g.NCommitsAhead)) +
 		len(strconv.Itoa(g.NCommitsBehind)) +
@@ -221,7 +209,7 @@ func getGitBranch(gitDirectory string) string {
 	return string(branchOutput)
 }
 
-func PrettyGitStats(g GitStats, f FormatStats) string {
+func PrettyGitStats(g GitStats) string {
 	ahead := fmt.Sprintf("\u2191%d", g.NCommitsAhead)
 	if g.NCommitsAhead > 0 {
 		ahead = colours.ColouredString(ahead, colours.Green)
