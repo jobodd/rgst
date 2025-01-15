@@ -1,0 +1,22 @@
+name: Go
+
+on:
+  push:
+    branches: [ "develop" ] # runs on push or on PR merge
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22.7'
+
+    - name: Checkout Code 
+      uses: actions/checkout@v4
+
+    - name: Test
+      run: go test -v ./...
+
