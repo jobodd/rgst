@@ -44,7 +44,7 @@ func main() {
 			&cli.BoolFlag{
 				Name:        "files",
 				Aliases:     []string{},
-				Usage:       "Show the list of files changed for each git directory, each prefixed with the `git status --porcelain` status formatting",
+				Usage:       "Show the list of files changed for each git directory",
 				Destination: &rgstOpts.GitOptions.ShowFiles,
 			},
 			&cli.StringFlag{
@@ -60,13 +60,6 @@ func main() {
 				Usage:       "Invert the regular expression match",
 				Destination: &rgstOpts.FilterOptions.ShouldInvertRegExp,
 			},
-			// &cli.StringFlag{
-			// 	Name:        "command",
-			// 	Aliases:     []string{"r"},
-			// 	Usage:       "Run a git command in each git directory",
-			// 	Value:       "",
-			// 	Destination: &rgstOpts.Command,
-			// },
 		},
 		Action: func(c *cli.Context) error {
 			if err := checkArgs(c, &rgstOpts); err != nil {
