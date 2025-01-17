@@ -33,15 +33,6 @@ type GitStats struct {
 	ChangedFiles         []string
 }
 
-// func (s GitStats) String() string {
-// 	return fmt.Sprintf(
-// 		"CurrentBranch: %s\nHasRemote: %v\nCommitsAheadOfRemote: %d",
-// 		s.CurrentBranch,
-// 		s.HasRemote,
-// 		s.CommitsAheadOfRemote,
-// 	)
-// }
-
 func UpdateDirectory(absPath string, opts GitOptions) {
 	var cmd *exec.Cmd
 	if opts.ShouldPull {
