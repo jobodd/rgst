@@ -33,14 +33,14 @@ type GitStats struct {
 	ChangedFiles         []string
 }
 
-func (s GitStats) String() string {
-	return fmt.Sprintf(
-		"CurrentBranch: %s\nHasRemote: %b\nCommitsAheadOfRemote: %d",
-		s.CurrentBranch,
-		s.HasRemote,
-		s.CommitsAheadOfRemote,
-	)
-}
+// func (s GitStats) String() string {
+// 	return fmt.Sprintf(
+// 		"CurrentBranch: %s\nHasRemote: %v\nCommitsAheadOfRemote: %d",
+// 		s.CurrentBranch,
+// 		s.HasRemote,
+// 		s.CommitsAheadOfRemote,
+// 	)
+// }
 
 func UpdateDirectory(absPath string, opts GitOptions) {
 	var cmd *exec.Cmd
@@ -111,34 +111,36 @@ func GetGitStats(absDir string) (GitStats, error) {
 	//TODO: pull out to func
 	gitStats.CurrentBranch = getGitBranch(absDir)
 
-	//TODO: pull out to func
-	// Get ahead/behind count
-	cmd := exec.Command("git",
-		"rev-list",
-		"--count",
-		"--left-right",
-		fmt.Sprintf("origin/%s...%s",
-			gitStats.CurrentBranch,
-			gitStats.CurrentBranch))
-	cmd.Dir = absDir
+	if false {
+		//TODO: pull out to func
+		// Get ahead/behind count
+		cmd := exec.Command("git",
+			"rev-list",
+			"--count",
+			"--left-right",
+			fmt.Sprintf("origin/%s...%s",
+				gitStats.CurrentBranch,
+				gitStats.CurrentBranch))
+		cmd.Dir = absDir
 
-	aheadBehindOutput, err := cmd.CombinedOutput()
-	if err != nil {
-		if strings.Contains(string(aheadBehindOutput), "unknown revision or path not in the working tree") {
-			return gitStats, nil
+		aheadBehindOutput, err := cmd.CombinedOutput()
+		if err != nil {
+			if strings.Contains(string(aheadBehindOutput), "unknown revision or path not in the working tree") {
+				return gitStats, fmt.Errorf(string(aheadBehindOutput))
+			}
+			return gitStats, fmt.Errorf("failed to get ahead/behind count for remote.\nBranch was: %s\nError was: %w", gitStats.CurrentBranch, err)
 		}
-		return gitStats, fmt.Errorf("failed to get ahead/behind count for remote.\nBranch was: %s\nError was: %w", gitStats.CurrentBranch, err)
-	}
-	parts := strings.Fields(string(aheadBehindOutput))
-	if len(parts) == 2 {
-		gitStats.CommitsBehindRemote, _ = strconv.Atoi(parts[0])
-		gitStats.CommitsAheadOfRemote, _ = strconv.Atoi(parts[1])
+		parts := strings.Fields(string(aheadBehindOutput))
+		if len(parts) == 2 {
+			gitStats.CommitsBehindRemote, _ = strconv.Atoi(parts[0])
+			gitStats.CommitsAheadOfRemote, _ = strconv.Atoi(parts[1])
+		}
 	}
 
 	//TODO: pull out to func
 	// Get branch ahead/behind count
 	masterBranch := "master"
-	cmd = exec.Command("git", "merge-base", masterBranch, gitStats.CurrentBranch)
+	cmd := exec.Command("git", "merge-base", masterBranch, gitStats.CurrentBranch)
 	cmd.Dir = absDir
 	cmdOut, err := cmd.CombinedOutput()
 	if err != nil {
@@ -188,6 +190,7 @@ func GetGitStats(absDir string) (GitStats, error) {
 
 	gitStats.CommitsAheadOfBranch = -1
 
+	fmt.Printf("About to get file status")
 	gitStats.FilesAddedCount,
 		gitStats.FilesRemovedCount,
 		gitStats.FilesModifiedCount,
@@ -198,9 +201,9 @@ func GetGitStats(absDir string) (GitStats, error) {
 
 func GitFileStatus(porcelainLines []string) (int, int, int, int) {
 	added, removed, modified, unstaged := 0, 0, 0, 0
-
 	//TODO: this was rushed; sanity check these
 	for _, line := range porcelainLines {
+		fmt.Println(line)
 		switch line[:4] {
 		case "[A ]": // staged
 			added++

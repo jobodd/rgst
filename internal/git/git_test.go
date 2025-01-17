@@ -151,7 +151,6 @@ func TestCountRemotes_CheckStats_UncommittedChange(t *testing.T) {
 
 	var cmds [][]string
 	cmds = append(cmds, []string{"touch", "foo.txt"})
-	cmds = append(cmds, []string{"git", "add", "foo.txt"})
 	runCmds(tmpDir, cmds)
 
 	stats, err := GetGitStats(tmpDir)
@@ -163,6 +162,6 @@ func TestCountRemotes_CheckStats_UncommittedChange(t *testing.T) {
 	got := stats.FilesUnstagedCount
 	want := 1
 	if got != want {
-		t.Fatalf(`Failed test: Got: %v, Want: %v`, got, want)
+		t.Fatalf(`Failed test: Got: %v, Want: %v. GitStats was: %+v`, got, want, stats)
 	}
 }
