@@ -65,15 +65,16 @@ func main() {
 			if err := checkArgs(c, &rgstOpts); err != nil {
 				return err
 			}
-
-			MAX_RECURSE_DEPTH := 5
-			fmt.Printf(
-				"Warning: Depth of %d exceeds max recursion limit of %d.\nLimiting to %d\n\n",
-				rgstOpts.RecurseDepth,
-				MAX_RECURSE_DEPTH,
-				MAX_RECURSE_DEPTH,
-			)
-			rgstOpts.RecurseDepth = min(5, rgstOpts.RecurseDepth)
+			var MAX_RECURSE_DEPTH uint = 5
+			if rgstOpts.RecurseDepth > MAX_RECURSE_DEPTH {
+				fmt.Printf(
+					"Warning: Depth of %d exceeds max recursion limit of %d.\nLimiting to %d\n\n",
+					rgstOpts.RecurseDepth,
+					MAX_RECURSE_DEPTH,
+					MAX_RECURSE_DEPTH,
+				)
+			}
+			rgstOpts.RecurseDepth = min(MAX_RECURSE_DEPTH, rgstOpts.RecurseDepth)
 			return rgst.MainProcess(rgstOpts)
 		},
 	}
