@@ -15,6 +15,7 @@ var mainTmpDir string
 var cmdsInitMaster [][]string
 var cmdsFirstCommit [][]string
 var cmdsCreateDevelopBranch [][]string
+var cmdsCreateRemoteAndClone [][]string
 
 func TestMain(m *testing.M) {
 	// setup
@@ -38,13 +39,31 @@ func setupCommonCommands() {
 	cmdsFirstCommit = append(cmdsFirstCommit, []string{"git", "commit", "-m", "'first commit'"})
 
 	cmdsCreateDevelopBranch = append(cmdsCreateDevelopBranch, []string{"git", "checkout", "-b", "develop"})
-
 }
 
 func createTmpSubDir() string {
 	tmpDir := path.Join(mainTmpDir, uuid.NewString())
 	os.Mkdir(tmpDir, 0700)
 	return tmpDir
+}
+
+func setupRemoteAndClone() (tmpRemote string, tmpClone string) {
+	tmpRemote = setupRemote()
+	tmpClone = cloneFromRemote(tmpRemote)
+	return tmpRemote, tmpClone
+}
+func setupRemote() (tmpRemote string) {
+	tmpRemote = createTmpSubDir()
+	runCmds(tmpRemote, cmdsInitMaster)
+	return tmpRemote
+}
+
+func cloneFromRemote(tmpRemote string) (tmpClone string) {
+	tmpClone = createTmpSubDir()
+	var cmdsCloneFromRemote [][]string
+	cmdsCloneFromRemote = append(cmdsCloneFromRemote, []string{"git", "clone", tmpRemote, "."})
+	runCmds(tmpClone, cmdsCloneFromRemote)
+	return tmpClone
 }
 
 func runCmds(absDir string, cmdsArgs [][]string) {
@@ -64,7 +83,7 @@ func runCmd(absGitDir string, command string, args []string) (cmdOut string) {
 func TestGetBranchName_NoCommits(t *testing.T) {
 	fmt.Println("Testing no commits!!!")
 	tmpDir := createTmpSubDir()
-	// defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir)
 	runCmds(tmpDir, cmdsInitMaster)
 
 	got := getGitBranch(tmpDir)
@@ -111,13 +130,9 @@ func TestCountRemotes_NoRemote(t *testing.T) {
 }
 
 func TestCountRemotes_OneRemote(t *testing.T) {
-	tmpRemote := createTmpSubDir()
-	runCmds(tmpRemote, cmdsInitMaster)
-
-	tmpClone := createTmpSubDir()
-	var cmdsCloneFromRemote [][]string
-	cmdsCloneFromRemote = append(cmdsCloneFromRemote, []string{"git", "clone", tmpRemote, "."})
-	runCmds(tmpClone, cmdsCloneFromRemote)
+	tmpRemote, tmpClone := setupRemoteAndClone()
+	defer os.RemoveAll(tmpRemote)
+	defer os.RemoveAll(tmpClone)
 
 	got := countRemotes(tmpClone)
 	want := 1
