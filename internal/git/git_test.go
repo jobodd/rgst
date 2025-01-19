@@ -66,11 +66,14 @@ func cloneFromRemote(tmpRemote string) (tmpClone string) {
 	return tmpClone
 }
 
-func runCmds(absDir string, cmdsArgs [][]string) {
+func runCmds(absDir string, cmdsArgs [][]string) (cmdsInOut []string) {
 	for _, args := range cmdsArgs {
-		fmt.Printf("Running: %s\n", args)
-		_ = runCmd(absDir, args[0], args[1:])
+		// fmt.Printf("Running: %s\n", args)
+		cmdOut := runCmd(absDir, args[0], args[1:])
+		// fmt.Println(cmdOut)
+		cmdsInOut = append(cmdsInOut, fmt.Sprintf("%s -> %s", args, cmdOut))
 	}
+	return cmdsInOut
 }
 
 func runCmd(absGitDir string, command string, args []string) (cmdOut string) {
@@ -81,7 +84,6 @@ func runCmd(absGitDir string, command string, args []string) (cmdOut string) {
 }
 
 func TestGetBranchName_NoCommits(t *testing.T) {
-	fmt.Println("Testing no commits!!!")
 	tmpDir := createTmpSubDir()
 	defer os.RemoveAll(tmpDir)
 	runCmds(tmpDir, cmdsInitMaster)
@@ -178,5 +180,23 @@ func TestCountRemotes_CheckStats_UncommittedChange(t *testing.T) {
 	want := 1
 	if got != want {
 		t.Fatalf(`Failed test: Got: %v, Want: %v. GitStats was: %+v`, got, want, stats)
+	}
+}
+
+func TestUnstaged(t *testing.T) {
+	tmpRemote, tmpClone := setupRemoteAndClone()
+	defer os.RemoveAll(tmpRemote)
+	defer os.RemoveAll(tmpClone)
+
+	_ = runCmd(tmpClone, "touch", []string{"foo.txt"})
+	stats, err := GetGitStats(tmpClone)
+	if err != nil {
+		t.Fatalf("Error getting git stats. Err: %v", err)
+	}
+	fmt.Printf("Stats: %v\n", stats)
+	got := stats.FilesUnstagedCount
+	want := 1
+	if got != want {
+		t.Fatalf(`Failed test: Got: %v, Want: %v`, got, want)
 	}
 }

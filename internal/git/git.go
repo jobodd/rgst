@@ -181,7 +181,6 @@ func GetGitStats(absDir string) (GitStats, error) {
 
 	gitStats.CommitsAheadOfBranch = -1
 
-	fmt.Printf("About to get file status")
 	gitStats.FilesAddedCount,
 		gitStats.FilesRemovedCount,
 		gitStats.FilesModifiedCount,
@@ -194,7 +193,6 @@ func GitFileStatus(porcelainLines []string) (int, int, int, int) {
 	added, removed, modified, unstaged := 0, 0, 0, 0
 	//TODO: this was rushed; sanity check these
 	for _, line := range porcelainLines {
-		fmt.Println(line)
 		switch line[:4] {
 		case "[A ]": // staged
 			added++
