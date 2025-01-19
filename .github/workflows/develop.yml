@@ -2,7 +2,10 @@ name: Go
 
 on:
   push:
-    branches: [ "develop" ] # runs on push or on PR merge
+    branches:
+      - "develop" 
+    paths-ignore:
+      - 'docs/**'
 
 jobs:
 
