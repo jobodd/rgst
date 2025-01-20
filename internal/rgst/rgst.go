@@ -44,7 +44,7 @@ func MainProcess(opts Options) error {
 	}
 
 	// update the git stats for each directory
-	collectGitStats(node)
+	collectGitStats(node, opts.GitOptions)
 	printDirTree(w, node, opts.GitOptions)
 	w.Flush()
 
@@ -66,12 +66,12 @@ func updateGitRepos(root *t.Node, gitOptions git.GitOptions) {
 	wg.Wait()
 }
 
-func collectGitStats(root *t.Node) {
+func collectGitStats(root *t.Node, gitOpts git.GitOptions) {
 	t.Walk(root, func(n *t.Node) {
 		n.FolderTreeWidth = len(n.FolderName) + 4 + (n.GetDepth() * 2)
 
 		if n.IsGitRepo {
-			gitStats, err := git.GetGitStats(n.AbsPath)
+			gitStats, err := git.GetGitStats(n.AbsPath, gitOpts)
 			if err != nil {
 				panic(err)
 			}
@@ -85,7 +85,7 @@ func printDirTree(w *tabwriter.Writer, root *t.Node, gitOpts git.GitOptions) {
 	t.Walk(root, func(n *t.Node) {
 		leftPad := strings.Repeat("  ", n.GetDepth())
 		folderTreeText := fmt.Sprintf("%s|-- %s", leftPad, n.FolderName)
-		commitStats := git.PrettyGitStats(n.GitStats)
+		commitStats := git.PrettyGitStats(n.GitStats, gitOpts)
 
 		var line string
 		if n.IsGitRepo {

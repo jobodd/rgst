@@ -170,7 +170,7 @@ func TestCountRemotes_CheckStats_UncommittedChange(t *testing.T) {
 	cmds = append(cmds, []string{"touch", "foo.txt"})
 	runCmds(tmpDir, cmds)
 
-	stats, err := GetGitStats(tmpDir)
+	stats, err := GetGitStats(tmpDir, GitOptions{})
 	if err != nil {
 		t.Fatalf("Failed test with error: %s", err)
 	}

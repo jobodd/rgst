@@ -47,6 +47,12 @@ func main() {
 				Usage:       "Show the list of files changed for each git directory",
 				Destination: &rgstOpts.GitOptions.ShowFiles,
 			},
+			&cli.BoolFlag{
+				Name:        "merge-base",
+				Aliases:     []string{"m"},
+				Usage:       "Show how far ahead/behind the current branch is from its merge base",
+				Destination: &rgstOpts.GitOptions.ShowMergeBase,
+			},
 			&cli.StringFlag{
 				Name:        "regular-expression",
 				Aliases:     []string{"e"},

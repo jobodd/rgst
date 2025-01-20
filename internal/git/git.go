@@ -16,12 +16,13 @@ type GitOptions struct {
 	ShouldFetchAll bool
 	ShouldPull     bool
 	ShowFiles      bool
+	ShowMergeBase  bool
 	Command        string
 }
 
 type GitStats struct {
 	CurrentBranch        string
-	HasRemote            bool
+	RemotesCount         int
 	CommitsAheadOfRemote int
 	CommitsBehindRemote  int
 	CommitsAheadOfBranch int
@@ -157,21 +158,33 @@ func getAheadBehindBranched(absDir string, currentBranch string) (ahead int, beh
 	}
 }
 
-func GetGitStats(absDir string) (GitStats, error) {
-	var gitStats GitStats
+func GetGitStats(absDir string, gitOpts GitOptions) (GitStats, error) {
+	gitStats := GitStats{
+		CurrentBranch:        "",
+		RemotesCount:         0,
+		CommitsAheadOfRemote: -1,
+		CommitsBehindRemote:  -1,
+		CommitsAheadOfBranch: -1,
+		CommitsBehindBranch:  -1,
+		FilesAddedCount:      -1,
+		FilesRemovedCount:    -1,
+		FilesModifiedCount:   -1,
+		FilesUnstagedCount:   -1,
+		ChangedFiles:         []string{},
+	}
 
 	gitStats.CurrentBranch = getGitBranch(absDir)
-	nRemotes := countRemotes(absDir)
-	//TODO: change this to a count of the remotes
-	gitStats.HasRemote = nRemotes == 1
+	gitStats.RemotesCount = countRemotes(absDir)
 
 	gitStats.CurrentBranch = getGitBranch(absDir)
 
 	gitStats.CommitsBehindRemote, gitStats.CommitsAheadOfRemote =
 		getAheadBehindRemote(absDir, gitStats.CurrentBranch)
 
-	gitStats.CommitsAheadOfBranch, gitStats.CommitsBehindBranch =
-		getAheadBehindBranched(absDir, gitStats.CurrentBranch)
+	if gitOpts.ShowMergeBase {
+		gitStats.CommitsAheadOfBranch, gitStats.CommitsBehindBranch =
+			getAheadBehindBranched(absDir, gitStats.CurrentBranch)
+	}
 
 	gitStats.ChangedFiles = getChangedFiles(absDir)
 
@@ -242,7 +255,9 @@ func parsePorcelain(porcelainLines []string) (int, int, int, int) {
 	return added, removed, modified, unstaged
 }
 
-func PrettyGitStats(g GitStats) string {
+func PrettyGitStats(g GitStats, gitOpts GitOptions) string {
+	var sb strings.Builder
+
 	nAheadRemote := fmt.Sprintf("\u2191%d", g.CommitsAheadOfRemote)
 	if g.CommitsAheadOfRemote == -1 {
 		nAheadRemote = "-"
@@ -252,6 +267,8 @@ func PrettyGitStats(g GitStats) string {
 	} else {
 		nAheadRemote = colours.ColouredString(nAheadRemote, colours.White)
 	}
+	sb.WriteString(nAheadRemote)
+	sb.WriteString("\t")
 
 	nBehindRemote := fmt.Sprintf("\u2193%d", g.CommitsBehindRemote)
 	if g.CommitsBehindRemote == -1 {
@@ -260,28 +277,35 @@ func PrettyGitStats(g GitStats) string {
 	if g.CommitsBehindRemote > 0 {
 		nBehindRemote = colours.ColouredString(nBehindRemote, colours.Red)
 	} else {
-		nBehindRemote = "-"
 		nBehindRemote = colours.ColouredString(nBehindRemote, colours.White)
 	}
+	sb.WriteString(nBehindRemote)
+	sb.WriteString("\t")
 
-	nBehindBranch := fmt.Sprintf("\u2190 %d", g.CommitsBehindBranch)
-	if g.CommitsBehindBranch == -1 {
-		nBehindBranch = "-"
-	}
-	if g.CommitsBehindBranch > 0 {
-		nBehindBranch = colours.ColouredString(nBehindBranch, colours.Red)
-	} else {
-		nBehindBranch = colours.ColouredString(" ", colours.White)
-	}
+	if gitOpts.ShowMergeBase {
+		nBehindBranch := fmt.Sprintf("\u2190 %d", g.CommitsBehindBranch)
+		if g.CommitsBehindBranch == -1 {
+			nBehindBranch = "-"
+		}
+		if g.CommitsBehindBranch > 0 {
+			nBehindBranch = colours.ColouredString(nBehindBranch, colours.Red)
+		} else {
+			nBehindBranch = colours.ColouredString(" ", colours.White)
+		}
+		sb.WriteString(nBehindBranch)
+		sb.WriteString("\t")
 
-	nAheadBranch := fmt.Sprintf("\u2192%d", g.CommitsAheadOfBranch)
-	if g.CommitsAheadOfBranch == -1 {
-		nAheadBranch = "-"
-	}
-	if g.CommitsAheadOfBranch > 0 {
-		nAheadBranch = colours.ColouredString(nAheadBranch, colours.Green)
-	} else {
-		nAheadBranch = colours.ColouredString(" ", colours.White)
+		nAheadBranch := fmt.Sprintf("\u2192%d", g.CommitsAheadOfBranch)
+		if g.CommitsAheadOfBranch == -1 {
+			nAheadBranch = "-"
+		}
+		if g.CommitsAheadOfBranch > 0 {
+			nAheadBranch = colours.ColouredString(nAheadBranch, colours.Green)
+		} else {
+			nAheadBranch = colours.ColouredString(" ", colours.White)
+		}
+		sb.WriteString(nAheadBranch)
+		sb.WriteString("\t")
 	}
 
 	added := fmt.Sprintf("+%d", g.FilesAddedCount)
@@ -290,6 +314,8 @@ func PrettyGitStats(g GitStats) string {
 	} else {
 		added = colours.ColouredString(added, colours.White)
 	}
+	sb.WriteString(added)
+	sb.WriteString("\t")
 
 	removed := fmt.Sprintf("-%d", g.FilesRemovedCount)
 	if g.FilesRemovedCount > 0 {
@@ -297,6 +323,8 @@ func PrettyGitStats(g GitStats) string {
 	} else {
 		removed = colours.ColouredString(removed, colours.White)
 	}
+	sb.WriteString(removed)
+	sb.WriteString("\t")
 
 	modified := fmt.Sprintf("~%d", g.FilesModifiedCount)
 	if g.FilesModifiedCount > 0 {
@@ -304,6 +332,8 @@ func PrettyGitStats(g GitStats) string {
 	} else {
 		modified = colours.ColouredString(modified, colours.White)
 	}
+	sb.WriteString(modified)
+	sb.WriteString("\t")
 
 	unstaged := fmt.Sprintf("U%d", g.FilesUnstagedCount)
 	if g.FilesUnstagedCount > 0 {
@@ -311,16 +341,8 @@ func PrettyGitStats(g GitStats) string {
 	} else {
 		unstaged = colours.ColouredString(unstaged, colours.White)
 	}
+	sb.WriteString(unstaged)
+	sb.WriteString("\t")
 
-	return fmt.Sprintf(
-		"%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t",
-		nAheadRemote,
-		nBehindRemote,
-		nAheadBranch,
-		nBehindBranch,
-		added,
-		removed,
-		modified,
-		unstaged,
-	)
+	return sb.String()
 }
