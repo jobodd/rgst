@@ -91,51 +91,46 @@ func countRemotes(absDir string) int {
 	return len(remotesList)
 }
 
-func GetGitStats(absDir string) (GitStats, error) {
-	var gitStats GitStats
+func getAheadBehindRemote(absDir string, currentBranch string) (ahead int, behind int) {
+	cmd := exec.Command("git",
+		"rev-list",
+		"--count",
+		"--left-right",
+		fmt.Sprintf("origin/%s...%s",
+			currentBranch,
+			currentBranch))
+	cmd.Dir = absDir
 
-	gitStats.CurrentBranch = getGitBranch(absDir)
-	nRemotes := countRemotes(absDir)
-	//TODO: change this to a count of the remotes
-	gitStats.HasRemote = nRemotes == 1
-
-	//TODO: pull out to func
-	gitStats.CurrentBranch = getGitBranch(absDir)
-
-	if false {
-		//TODO: pull out to func
-		// Get ahead/behind count
-		cmd := exec.Command("git",
-			"rev-list",
-			"--count",
-			"--left-right",
-			fmt.Sprintf("origin/%s...%s",
-				gitStats.CurrentBranch,
-				gitStats.CurrentBranch))
-		cmd.Dir = absDir
-
-		aheadBehindOutput, err := cmd.CombinedOutput()
-		if err != nil {
-			if strings.Contains(string(aheadBehindOutput), "unknown revision or path not in the working tree") {
-				return gitStats, fmt.Errorf(string(aheadBehindOutput))
-			}
-			return gitStats, fmt.Errorf("failed to get ahead/behind count for remote.\nBranch was: %s\nError was: %w", gitStats.CurrentBranch, err)
-		}
-		parts := strings.Fields(string(aheadBehindOutput))
-		if len(parts) == 2 {
-			gitStats.CommitsBehindRemote, _ = strconv.Atoi(parts[0])
-			gitStats.CommitsAheadOfRemote, _ = strconv.Atoi(parts[1])
-		}
+	aheadBehindOutput, err := cmd.CombinedOutput()
+	if err != nil {
+		// no remote
+		return -1, -1
+		// if strings.Contains(string(aheadBehindOutput), "unknown revision or path not in the working tree") {
+		// 	// no remote
+		// 	return gitStats, fmt.Errorf(string(aheadBehindOutput))
+		// }
+		// return gitStats, fmt.Errorf("failed to get ahead/behind count for remote.\nBranch was: %s\nError was: %w", gitStats.CurrentBranch, err)
 	}
+	parts := strings.Fields(string(aheadBehindOutput))
+	if len(parts) != 2 {
+		log.Fatal("Something went wrong")
+		return -1, -1
+	}
+	ahead, err1 := strconv.Atoi(parts[0])
+	behind, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil {
+		log.Fatal(fmt.Sprintf("Something went wrong getting the ahead/behind for remote.\nAhead gave: %s\nBehind gave: %s\n", err1, err2))
+	}
+	return ahead, behind
+}
 
-	//TODO: pull out to func
-	// Get branch ahead/behind count
+func getAheadBehindBranched(absDir string, currentBranch string) (ahead int, behind int) {
 	masterBranch := "master"
-	cmd := exec.Command("git", "merge-base", masterBranch, gitStats.CurrentBranch)
+	cmd := exec.Command("git", "merge-base", masterBranch, currentBranch)
 	cmd.Dir = absDir
 	cmdOut, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Println(fmt.Sprintf("Failed getting merge base.\nError: %s\nOut: %s", err, cmdOut))
+		return -1, -1
 	} else {
 		mergeBase := strings.TrimSpace(string(cmdOut))
 		cmd = exec.Command("git",
@@ -151,83 +146,97 @@ func GetGitStats(absDir string) (GitStats, error) {
 		cmdOut, err = cmd.CombinedOutput()
 
 		if err != nil {
-			fmt.Println(fmt.Sprintf("failed to get ahead/behind count for branch.\nError was: %s", err))
+			return -1, -1
 		} else {
-
-			gitStats.CommitsBehindBranch, _ = strconv.Atoi(strings.TrimSpace(string(cmdOut)))
+			behind, err := strconv.Atoi(strings.TrimSpace(string(cmdOut)))
+			if err != nil {
+				return -1, -1
+			}
+			return -1, behind
 		}
 	}
+}
 
-	//TODO: pull out to func
-	cmd = exec.Command("git", "status", "--porcelain")
-	cmd.Dir = absDir
-	statusPorcelainOut, err := cmd.Output()
-	if err != nil {
-		return gitStats, fmt.Errorf("Failed to get git status --porcelain. %s", err)
-	}
-	porcelainStatus := strings.TrimRight(string(statusPorcelainOut), " \n")
-	gitStats.ChangedFiles = strings.Split(porcelainStatus, "\n")
-	if len(gitStats.ChangedFiles) == 1 && gitStats.ChangedFiles[0] == "" {
-		gitStats.ChangedFiles = []string{}
-	} else {
-		for i := 0; i < len(gitStats.ChangedFiles); i++ {
-			gitStats.ChangedFiles[i] = fmt.Sprintf(
-				"[%s]%s",
-				gitStats.ChangedFiles[i][0:2],
-				gitStats.ChangedFiles[i][2:],
-			)
-		}
-	}
+func GetGitStats(absDir string) (GitStats, error) {
+	var gitStats GitStats
 
-	gitStats.CommitsAheadOfBranch = -1
+	gitStats.CurrentBranch = getGitBranch(absDir)
+	nRemotes := countRemotes(absDir)
+	//TODO: change this to a count of the remotes
+	gitStats.HasRemote = nRemotes == 1
+
+	gitStats.CurrentBranch = getGitBranch(absDir)
+
+	gitStats.CommitsBehindRemote, gitStats.CommitsAheadOfRemote =
+		getAheadBehindRemote(absDir, gitStats.CurrentBranch)
+
+	gitStats.CommitsAheadOfBranch, gitStats.CommitsBehindBranch =
+		getAheadBehindBranched(absDir, gitStats.CurrentBranch)
+
+	gitStats.ChangedFiles = getChangedFiles(absDir)
 
 	gitStats.FilesAddedCount,
 		gitStats.FilesRemovedCount,
 		gitStats.FilesModifiedCount,
-		gitStats.FilesUnstagedCount = GitFileStatus(gitStats.ChangedFiles)
+		gitStats.FilesUnstagedCount = parsePorcelain(gitStats.ChangedFiles)
 
 	return gitStats, nil
 }
 
-func GitFileStatus(porcelainLines []string) (int, int, int, int) {
+func getChangedFiles(absDir string) (changedFiles []string) {
+	cmd := exec.Command("git", "status", "--porcelain")
+	cmd.Dir = absDir
+	statusPorcelainOut, err := cmd.Output()
+	if err != nil {
+		log.Fatal("something went wrong getting file changelist")
+		return []string{}
+	}
+	porcelainStatus := strings.TrimRight(string(statusPorcelainOut), " \n")
+	changedFiles = strings.Split(porcelainStatus, "\n")
+	if len(changedFiles) == 1 && changedFiles[0] == "" {
+		changedFiles = []string{}
+	} else {
+		for i := 0; i < len(changedFiles); i++ {
+			changedFiles[i] = fmt.Sprintf(
+				"[%s]%s",
+				changedFiles[i][0:2],
+				changedFiles[i][2:],
+			)
+		}
+	}
+	return changedFiles
+}
+
+func parsePorcelain(porcelainLines []string) (int, int, int, int) {
 	added, removed, modified, unstaged := 0, 0, 0, 0
 	//TODO: this was rushed; sanity check these
 	for _, line := range porcelainLines {
-		switch line[:4] {
-		case "[A ]": // staged
+		switch line[1] {
+		case '!':
+			log.Fatalf("Unhandled file status: `%s`\n", line)
+		case 'M', 'T', 'R', 'C':
+			modified++
+		case 'A', '?':
 			added++
-		case "[D ", " D]": // deleted
+		case 'D':
 			removed++
-		case "[ M]":
-			unstaged++
-		case "[M ]":
-			modified++
-		case "[MM]":
-			modified++
-			unstaged++
-		case "[??]": // untracked?
-			unstaged++
-		case "[T ]": // type changed
-			modified++
-		case "[ T]": // type changed
-			unstaged++
-		case "[TT]": // type changed
-			modified++
-			unstaged++
-		case "[R ]":
-			modified++
-		case "[ R]":
-			unstaged++
-		case "[RR]":
-			modified++
-			unstaged++
-		case "[!!]": //ignored
-			fmt.Printf("File ignored: %s\n", line)
-		case "[UU]": // conflicted
-			fmt.Printf("File conflict: %s\n", line)
+		case ' ':
+		// no staged changes
 		default:
-			fmt.Printf("Unhandled file status: `%s`\n", line)
+			fmt.Printf("Unhandled file status in the index: `%s`\n", line)
 		}
+
+		switch line[2] {
+		case '!':
+			log.Fatalf("Unhandled file status: `%s`\n", line)
+		case 'M', 'T', 'R', 'C', 'A', 'D', '?', 'U':
+			unstaged++
+		case ' ':
+		// no unstaged changes
+		default:
+			log.Fatalf("Unhandled file status in the working tree: `%s`\n", line)
+		}
+
 	}
 
 	return added, removed, modified, unstaged
@@ -235,6 +244,9 @@ func GitFileStatus(porcelainLines []string) (int, int, int, int) {
 
 func PrettyGitStats(g GitStats) string {
 	nAheadRemote := fmt.Sprintf("\u2191%d", g.CommitsAheadOfRemote)
+	if g.CommitsAheadOfRemote == -1 {
+		nAheadRemote = "-"
+	}
 	if g.CommitsAheadOfRemote > 0 {
 		nAheadRemote = colours.ColouredString(nAheadRemote, colours.Green)
 	} else {
@@ -242,13 +254,20 @@ func PrettyGitStats(g GitStats) string {
 	}
 
 	nBehindRemote := fmt.Sprintf("\u2193%d", g.CommitsBehindRemote)
+	if g.CommitsBehindRemote == -1 {
+		nBehindRemote = "-"
+	}
 	if g.CommitsBehindRemote > 0 {
 		nBehindRemote = colours.ColouredString(nBehindRemote, colours.Red)
 	} else {
+		nBehindRemote = "-"
 		nBehindRemote = colours.ColouredString(nBehindRemote, colours.White)
 	}
 
 	nBehindBranch := fmt.Sprintf("\u2190 %d", g.CommitsBehindBranch)
+	if g.CommitsBehindBranch == -1 {
+		nBehindBranch = "-"
+	}
 	if g.CommitsBehindBranch > 0 {
 		nBehindBranch = colours.ColouredString(nBehindBranch, colours.Red)
 	} else {
@@ -256,6 +275,9 @@ func PrettyGitStats(g GitStats) string {
 	}
 
 	nAheadBranch := fmt.Sprintf("\u2192%d", g.CommitsAheadOfBranch)
+	if g.CommitsAheadOfBranch == -1 {
+		nAheadBranch = "-"
+	}
 	if g.CommitsAheadOfBranch > 0 {
 		nAheadBranch = colours.ColouredString(nAheadBranch, colours.Green)
 	} else {

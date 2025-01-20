@@ -184,19 +184,48 @@ func TestCountRemotes_CheckStats_UncommittedChange(t *testing.T) {
 }
 
 func TestUnstaged(t *testing.T) {
-	tmpRemote, tmpClone := setupRemoteAndClone()
-	defer os.RemoveAll(tmpRemote)
-	defer os.RemoveAll(tmpClone)
-
-	_ = runCmd(tmpClone, "touch", []string{"foo.txt"})
-	stats, err := GetGitStats(tmpClone)
-	if err != nil {
-		t.Fatalf("Error getting git stats. Err: %v", err)
+	changedFiles := []string{
+		"[ U] foo.txt",
 	}
-	fmt.Printf("Stats: %v\n", stats)
-	got := stats.FilesUnstagedCount
+
+	_, _, _, unstaged := parsePorcelain(changedFiles)
+
+	got := unstaged
 	want := 1
 	if got != want {
 		t.Fatalf(`Failed test: Got: %v, Want: %v`, got, want)
+	}
+
+}
+
+func TestCommit(t *testing.T) {
+	changedFiles := []string{
+		"[A ] foo.txt",
+	}
+
+	added, _, _, _ := parsePorcelain(changedFiles)
+
+	got := added
+	want := 1
+	if got != want {
+		t.Fatalf(`Failed test: Got: %v, Want: %v`, got, want)
+	}
+}
+
+func TestCommitAndChange(t *testing.T) {
+	changedFiles := []string{
+		"[AU] foo.txt",
+	}
+
+	added, _, _, unstaged := parsePorcelain(changedFiles)
+	got := added
+	want := 1
+	if got != want {
+		t.Fatalf(`Failed test: Got %v added, Want: %v`, got, want)
+	}
+	got = unstaged
+	want = 1
+	if got != want {
+		t.Fatalf(`Failed test: Got %v added, Want: %v`, got, want)
 	}
 }
