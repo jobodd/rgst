@@ -24,7 +24,7 @@ type Node struct {
 
 type FilterOptions struct {
 	ShouldFilter       bool
-	RegExp             string
+	Regex              string
 	ShouldInvertRegExp bool
 }
 
@@ -86,7 +86,7 @@ func FilterNodes(node *Node, filterOpts FilterOptions) *Node {
 		keepNode = true
 
 		if filterOpts.ShouldFilter {
-			m, err := regexp.MatchString(filterOpts.RegExp, node.FolderName)
+			m, err := regexp.MatchString(filterOpts.Regex, node.AbsPath)
 			if err != nil {
 				log.Fatal(err)
 			}

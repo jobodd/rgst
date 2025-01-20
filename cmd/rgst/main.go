@@ -44,15 +44,21 @@ func main() {
 			&cli.BoolFlag{
 				Name:        "files",
 				Aliases:     []string{},
-				Usage:       "Show the list of files changed for each git directory, each prefixed with the `git status --porcelain` status formatting",
+				Usage:       "Show the list of files changed for each git directory",
 				Destination: &rgstOpts.GitOptions.ShowFiles,
 			},
+			&cli.BoolFlag{
+				Name:        "merge-base",
+				Aliases:     []string{"m"},
+				Usage:       "Show how far ahead/behind the current branch is from its merge base",
+				Destination: &rgstOpts.GitOptions.ShowMergeBase,
+			},
 			&cli.StringFlag{
-				Name:        "regular-expression",
+				Name:        "regex",
 				Aliases:     []string{"e"},
 				Usage:       "Filter directories with an regular expression",
 				Value:       "",
-				Destination: &rgstOpts.FilterOptions.RegExp,
+				Destination: &rgstOpts.FilterOptions.Regex,
 			},
 			&cli.BoolFlag{
 				Name:        "invert-match",
@@ -60,13 +66,6 @@ func main() {
 				Usage:       "Invert the regular expression match",
 				Destination: &rgstOpts.FilterOptions.ShouldInvertRegExp,
 			},
-			// &cli.StringFlag{
-			// 	Name:        "command",
-			// 	Aliases:     []string{"r"},
-			// 	Usage:       "Run a git command in each git directory",
-			// 	Value:       "",
-			// 	Destination: &rgstOpts.Command,
-			// },
 		},
 		Action: func(c *cli.Context) error {
 			if err := checkArgs(c, &rgstOpts); err != nil {
@@ -109,7 +108,7 @@ func checkArgs(c *cli.Context, rgstOpts *rgst.Options) error {
 }
 
 func checkFilterOptions(rgstOpts *rgst.Options) error {
-	if rgstOpts.FilterOptions.RegExp != "" {
+	if rgstOpts.FilterOptions.Regex != "" {
 		rgstOpts.FilterOptions.ShouldFilter = true
 	} else if rgstOpts.FilterOptions.ShouldInvertRegExp {
 		return errors.New("Can't invert without a match. (See --help for flags: --regular-expression and --invert-match)")

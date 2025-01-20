@@ -2,7 +2,10 @@ name: Go
 
 on:
   push:
-    branches: [ "master" ] # runs on push or on PR merge
+    branches:
+      - "master"
+    paths-ignore:
+      - 'docs/**'
 
 jobs:
 
@@ -62,8 +65,8 @@ jobs:
           git describe --tags --always
           go build -ldflags "-X 'main.Version=$(git describe --tags --always)' -X 'main.BuildTime=$(date -u +'%Y-%m-%dT%H:%M:%SZ')'" -o bin/rgst cmd/rgst/main.go
 
-    # - name: Test
-    #   run: go test -v ./...
+    - name: Test
+      run: go test -v ./...
 
     - name: Create GitHub Release
       uses: actions/create-release@v1
