@@ -54,11 +54,11 @@ func main() {
 				Destination: &rgstOpts.GitOptions.ShowMergeBase,
 			},
 			&cli.StringFlag{
-				Name:        "regular-expression",
+				Name:        "regex",
 				Aliases:     []string{"e"},
 				Usage:       "Filter directories with an regular expression",
 				Value:       "",
-				Destination: &rgstOpts.FilterOptions.RegExp,
+				Destination: &rgstOpts.FilterOptions.Regex,
 			},
 			&cli.BoolFlag{
 				Name:        "invert-match",
@@ -108,7 +108,7 @@ func checkArgs(c *cli.Context, rgstOpts *rgst.Options) error {
 }
 
 func checkFilterOptions(rgstOpts *rgst.Options) error {
-	if rgstOpts.FilterOptions.RegExp != "" {
+	if rgstOpts.FilterOptions.Regex != "" {
 		rgstOpts.FilterOptions.ShouldFilter = true
 	} else if rgstOpts.FilterOptions.ShouldInvertRegExp {
 		return errors.New("Can't invert without a match. (See --help for flags: --regular-expression and --invert-match)")
