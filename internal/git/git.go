@@ -64,13 +64,23 @@ func runGitCmd(absGitDirectory string, gitArgs []string) (cmdOut string, err err
 }
 
 func getGitBranch(absDir string) string {
-	//TODO: this should never really throw an error unless we're calling it in a non-git dir
 	cmdOut, err := runGitCmd(absDir, []string{"branch", "--show-current"})
 	if err != nil {
 		fmt.Printf("Error getting git branch: %s", cmdOut)
 		log.Fatal("Error getting git branch")
 	}
-	return strings.TrimSpace(cmdOut)
+	branchName := strings.TrimSpace(cmdOut)
+
+	// if we've checked out a detached HEAD
+	if branchName == "" {
+		cmdOut, err = runGitCmd(absDir, []string{"rev-parse", "--abbrev-ref", "HEAD"})
+		if err != nil {
+			fmt.Printf("Error getting git branch: %s", cmdOut)
+			log.Fatal("Error getting git branch")
+		}
+		branchName = strings.TrimSpace(cmdOut)
+	}
+	return branchName
 }
 
 func countRemotes(absDir string) int {
