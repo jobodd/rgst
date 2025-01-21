@@ -110,20 +110,3 @@ func printDirTree(w *tabwriter.Writer, root *t.Node, gitOpts git.GitOptions, fol
 		}
 	})
 }
-
-func padText(s string, maxDirLength int) string {
-	// remove newlines
-	s = strings.Replace(s, "\n", "", -1)
-
-	diff := maxDirLength - len(s)
-	switch true {
-	case diff > 0:
-		padding := strings.Repeat(" ", diff)
-		return s + padding
-	case diff == 0:
-		return s
-	default:
-		fmt.Printf("Failed to pad: %s", s)
-		panic("Attempting to pad a string longer than the pad length")
-	}
-}
