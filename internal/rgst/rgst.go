@@ -45,7 +45,11 @@ func MainProcess(opts Options) error {
 
 	// update the git stats for each directory
 	collectGitStats(node, opts.GitOptions)
-	printDirTree(w, node, opts.GitOptions)
+	folderTabCount := 8
+	if opts.GitOptions.ShowMergeBase {
+		folderTabCount += 2
+	}
+	printDirTree(w, node, opts.GitOptions, folderTabCount)
 	w.Flush()
 
 	return nil
@@ -81,7 +85,7 @@ func collectGitStats(root *t.Node, gitOpts git.GitOptions) {
 	})
 }
 
-func printDirTree(w *tabwriter.Writer, root *t.Node, gitOpts git.GitOptions) {
+func printDirTree(w *tabwriter.Writer, root *t.Node, gitOpts git.GitOptions, folderTabCount int) {
 	t.Walk(root, func(n *t.Node) {
 		leftPad := strings.Repeat("  ", n.GetDepth())
 		folderTreeText := fmt.Sprintf("%s|-- %s", leftPad, n.FolderName)
@@ -91,7 +95,7 @@ func printDirTree(w *tabwriter.Writer, root *t.Node, gitOpts git.GitOptions) {
 		if n.IsGitRepo {
 			line = fmt.Sprintf("%s\t%s\t%s", folderTreeText, n.GitStats.CurrentBranch, commitStats)
 		} else {
-			line = fmt.Sprintf("%s\t\t", folderTreeText)
+			line = fmt.Sprintf("%s%s", folderTreeText, strings.Repeat("\t", folderTabCount))
 		}
 		fmt.Fprintln(w, line)
 
