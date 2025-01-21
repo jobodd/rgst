@@ -19,7 +19,7 @@ func main() {
 			&cli.UintFlag{
 				Name:        "depth",
 				Aliases:     []string{"d"},
-				Usage:       "Set the recursion depth to check for git repos",
+				Usage:       "Set the recursion depth to check for git repos. Max: 5",
 				Value:       0,
 				Destination: &rgstOpts.RecurseDepth,
 			},
@@ -47,12 +47,12 @@ func main() {
 				Usage:       "Show the list of files changed for each git directory",
 				Destination: &rgstOpts.GitOptions.ShowFiles,
 			},
-			&cli.BoolFlag{
-				Name:        "merge-base",
-				Aliases:     []string{"m"},
-				Usage:       "Show how far ahead/behind the current branch is from its merge base",
-				Destination: &rgstOpts.GitOptions.ShowMergeBase,
-			},
+			// &cli.BoolFlag{
+			// 	Name:        "merge-base",
+			// 	Aliases:     []string{"m"},
+			// 	Usage:       "Show how far ahead/behind the current branch is from its merge base",
+			// 	Destination: &rgstOpts.GitOptions.ShowMergeBase,
+			// },
 			&cli.StringFlag{
 				Name:        "regex",
 				Aliases:     []string{"e"},
