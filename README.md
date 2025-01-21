@@ -13,20 +13,20 @@ go install github.com/jobodd/rgst/cmd/rgst@latest
 ## Usage
 
 Basic usage calls rgst on the current directory, showing the current branch, number of commits ahead/behind the remote, as well as files added/modified/removed/unstaged.
-```sh
+```
 $ rgst
 |-- rgst develop ↑0 ↓0 +1 -0 ~0 U1
 ````
 
 `rgst` takes a single argument as a path, and optional flags
-```sh
+```
 $ rgst --files ~/dev/rgst
 |-- rgst develop ↑0 ↓0 +1 -0 ~0 U1 
    |-- [AM] README
 ````
 
 Run against a different directory, recurse one level down
-```sh
+```
 $ rgst --depth 1  ~/dev/examples 
 |-- examples                                                                                          
   |-- dbms                                                                                            
@@ -40,7 +40,7 @@ $ rgst --depth 1  ~/dev/examples
 ```
 
 Filter directories with regex
-```sh
+```
 $ rgst --depth 1 --regex lang  ~/dev/examples
 |-- examples                                                                                     
   |-- languages                                                                                  
@@ -57,7 +57,7 @@ $ rgst --depth 1 --regex lang -v  ~/dev/examples
 ```
 
 See `--help` for additional flags
-```sh
+```
 $ rgst --help
 NAME:
    Recursive git status - Check the status of Git repositories in subdirectories
